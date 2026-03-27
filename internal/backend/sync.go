@@ -104,7 +104,7 @@ func (se *SyncEngine) BackfillEmptyConversations() error {
 
 	filled := 0
 	for _, convID := range ids {
-		msgs, err := se.client.FetchMessages(convID, 200)
+		msgs, err := se.client.FetchMessages(convID, 400)
 		if err != nil {
 			log.Printf("sync: fetch messages for %s: %v", convID, err)
 			continue
@@ -191,7 +191,7 @@ func (se *SyncEngine) DeepBackfill() error {
 		}
 
 		// Fetch messages for each conversation
-		msgs, err := se.client.FetchMessages(c.ID, 200)
+		msgs, err := se.client.FetchMessages(c.ID, 400)
 		if err != nil {
 			log.Printf("sync: deep fetch messages for %s: %v", c.ID, err)
 			continue
