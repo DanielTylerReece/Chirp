@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="com.github.gmessage" path="/com/github/gmessage/">
+    <key name="sync-interval-minutes" type="i">
+      <default>5</default>
+      <summary>Sync interval</summary>
+      <description>Minutes between background sync polls</description>
+    </key>
+    <key name="media-cache-max-mb" type="i">
+      <default>500</default>
+      <summary>Media cache size limit</summary>
+      <description>Maximum media cache size in megabytes</description>
+    </key>
+    <key name="notification-enabled" type="b">
+      <default>true</default>
+      <summary>Enable notifications</summary>
+      <description>Show desktop notifications for new messages</description>
+    </key>
+    <key name="window-width" type="i">
+      <default>1000</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>700</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Window maximized</summary>
+    </key>
+  </schema>
+</schemalist>

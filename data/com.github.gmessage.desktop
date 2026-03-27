@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=GMessage
+Comment=Google Messages for GNOME
+Exec=gmessage
+Terminal=false
+Type=Application
+Categories=Network;Chat;InstantMessaging;
+Keywords=messages;sms;rcs;google;
+StartupNotify=true
+Icon=com.github.gmessage
+X-GNOME-UsesNotifications=true

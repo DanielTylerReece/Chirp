@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=GMessage Daemon
+Comment=GMessage background notification service
+Exec=gmessage --daemon
+Terminal=false
+Type=Application
+Categories=
+NoDisplay=true
+X-GNOME-Autostart-enabled=false

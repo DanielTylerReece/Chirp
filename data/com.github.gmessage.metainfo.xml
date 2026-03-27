@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.github.gmessage</id>
+  <name>GMessage</name>
+  <summary>Google Messages for GNOME</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <description>
+    <p>A native GTK4/libadwaita Google Messages client for Linux. Pairs with your Android phone to send and receive SMS/RCS messages from your desktop.</p>
+  </description>
+  <url type="homepage">https://github.com/tyler/gmessage</url>
+  <url type="bugtracker">https://github.com/tyler/gmessage/issues</url>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </recommends>
+</component>

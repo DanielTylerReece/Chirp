@@ -1,0 +1,149 @@
+/* GMessage Stylesheet — Light Mode */
+
+/* === Conversation Row === */
+.conversation-row {
+    padding: 0;
+    min-height: 68px;
+}
+
+.conversation-name {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.conversation-preview {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.conversation-time {
+    font-size: 10px;
+    opacity: 0.5;
+    min-width: 50px;
+}
+
+.unread-badge {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+    font-size: 11px;
+    font-weight: bold;
+    min-width: 20px;
+    min-height: 20px;
+    border-radius: 10px;
+    padding: 0 6px;
+}
+
+/* === Status Banner === */
+.status-banner {
+    background-color: alpha(@warning_color, 0.15);
+    color: @warning_color;
+    padding: 4px 12px;
+    font-size: 12px;
+}
+
+/* === Message Bubbles === */
+.messagebubble {
+    border-radius: 18px;
+    padding: 8px 10px;
+    margin: 1px 4px;
+}
+
+.messagebubble.sent {
+    background-color: #0B93F6;
+    color: #FFFFFF;
+}
+
+.messagebubble.received {
+    background-color: @card_bg_color;
+}
+
+.messagebubble.sent.consecutive-top {
+    border-bottom-right-radius: 6px;
+}
+
+.messagebubble.sent.consecutive-middle {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.messagebubble.sent.consecutive-bottom {
+    border-top-right-radius: 6px;
+}
+
+.messagebubble.received.consecutive-top {
+    border-bottom-left-radius: 6px;
+}
+
+.messagebubble.received.consecutive-middle {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.messagebubble.received.consecutive-bottom {
+    border-top-left-radius: 6px;
+}
+
+/* === Message List === */
+.message-list row {
+    padding: 0;
+    min-height: 0;
+}
+
+.message-time {
+    font-size: 10px;
+}
+
+/* === Date Separator === */
+.date-separator {
+    font-size: 11px;
+    font-weight: 600;
+    color: alpha(@window_fg_color, 0.5);
+    margin: 16px 0 8px;
+}
+
+/* === Typing Indicator === */
+.typing-dot {
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 4px;
+    background-color: alpha(@window_fg_color, 0.4);
+}
+
+/* === Reaction Pills === */
+.reaction-pill {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background-color: alpha(@window_fg_color, 0.08);
+}
+
+/* === Compose Bar === */
+.compose-entry {
+    border-radius: 18px;
+    padding: 8px 12px;
+    min-height: 36px;
+}
+
+.compose-send-button {
+    border-radius: 50%;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+}
+
+/* === Chat Header === */
+.chat-header {
+    padding: 8px 12px;
+}
+
+.chat-header-name {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.chat-header-status {
+    font-size: 11px;
+    opacity: 0.6;
+}

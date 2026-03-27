@@ -1,0 +1,45 @@
+# Maintainer: Tyler Reece
+pkgname=gmessage-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Native GTK4/libadwaita Google Messages client for GNOME'
+arch=('x86_64')
+url='https://github.com/tyler/gmessage'
+license=('AGPL-3.0-or-later')
+depends=('gtk4' 'libadwaita' 'webkit2gtk-5.0')
+makedepends=('go' 'git')
+provides=('gmessage')
+conflicts=('gmessage')
+source=('git+file:///home/tyler/Projects/gmessage')
+sha256sums=('SKIP')
+
+pkgver() {
+    cd gmessage
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd gmessage
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_CXXFLAGS="${CXXFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS}"
+    export GOFLAGS="-buildmode=pie -trimpath -ldflags=-linkmode=external -mod=readonly -modcacherw"
+    go build -o gmessage .
+}
+
+package() {
+    cd gmessage
+
+    local _app_id="com.github.gmessage"
+
+    install -Dm755 gmessage "${pkgdir}/usr/bin/gmessage"
+    install -Dm644 "data/${_app_id}.desktop" "${pkgdir}/usr/share/applications/${_app_id}.desktop"
+    install -Dm644 "data/${_app_id}.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${_app_id}.svg"
+    install -Dm644 "data/${_app_id}.gschema.xml" "${pkgdir}/usr/share/glib-2.0/schemas/${_app_id}.gschema.xml"
+    install -Dm644 "data/${_app_id}.metainfo.xml" "${pkgdir}/usr/share/metainfo/${_app_id}.metainfo.xml"
+    install -Dm644 data/gmessage-daemon.service "${pkgdir}/usr/lib/systemd/user/gmessage-daemon.service"
+    # Fix ExecStart path for system-wide install
+    sed -i 's|ExecStart=/usr/local/bin/gmessage|ExecStart=/usr/bin/gmessage|' \
+        "${pkgdir}/usr/lib/systemd/user/gmessage-daemon.service"
+    install -Dm644 "data/${_app_id}.Daemon.desktop" "${pkgdir}/etc/xdg/autostart/${_app_id}.Daemon.desktop"
+}

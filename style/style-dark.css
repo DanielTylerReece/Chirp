@@ -1,0 +1,10 @@
+/* GMessage Stylesheet — Dark Mode Overrides */
+
+messagebubble.sent {
+    background-color: #0B84FE;
+}
+
+messagebubble.received {
+    background-color: #3A3A3C;
+    color: #FFFFFF;
+}
