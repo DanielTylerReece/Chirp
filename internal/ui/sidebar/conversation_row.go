@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/tyler/gmessage/internal/db"
@@ -30,6 +31,7 @@ func NewConversationRow(conv *db.Conversation) *ConversationRow {
 	//               [Preview         Badge  ]
 
 	cr.row = gtk.NewListBoxRow()
+	cr.row.SetName(conv.ID) // Used to identify conversation on click
 	cr.row.AddCSSClass("conversation-row")
 
 	hbox := gtk.NewBox(gtk.OrientationHorizontal, 12)
@@ -38,8 +40,17 @@ func NewConversationRow(conv *db.Conversation) *ConversationRow {
 	hbox.SetMarginStart(12)
 	hbox.SetMarginEnd(12)
 
-	// Avatar
-	cr.avatar = adw.NewAvatar(40, conv.Name, true)
+	// Avatar — show contact photo if cached, fallback to initials or "#"
+	avatarText := conv.Name
+	if looksLikePhoneNumber(conv.Name) {
+		avatarText = "#"
+	}
+	cr.avatar = adw.NewAvatar(40, avatarText, true)
+	if conv.AvatarURL != "" {
+		if tex, err := gdk.NewTextureFromFilename(conv.AvatarURL); err == nil {
+			cr.avatar.SetCustomImage(tex)
+		}
+	}
 	hbox.Append(cr.avatar)
 
 	// Right side: name/time on top, preview/badge on bottom
@@ -66,13 +77,17 @@ func NewConversationRow(conv *db.Conversation) *ConversationRow {
 	cr.previewLabel = gtk.NewLabel(conv.LastMessagePreview)
 	cr.previewLabel.SetXAlign(0)
 	cr.previewLabel.SetHExpand(true)
+	cr.previewLabel.SetLines(2)
 	cr.previewLabel.SetEllipsize(pango.EllipsizeEnd)
+	cr.previewLabel.SetWrap(true)
+	cr.previewLabel.SetWrapMode(pango.WrapWordChar)
 	cr.previewLabel.AddCSSClass("conversation-preview")
 	bottomBox.Append(cr.previewLabel)
 
 	if conv.UnreadCount > 0 {
 		cr.unreadLabel = gtk.NewLabel(fmt.Sprintf("%d", conv.UnreadCount))
 		cr.unreadLabel.AddCSSClass("unread-badge")
+		cr.unreadLabel.SetVAlign(gtk.AlignCenter)
 		bottomBox.Append(cr.unreadLabel)
 	}
 
@@ -88,7 +103,27 @@ func (cr *ConversationRow) Update(conv *db.Conversation) {
 	cr.nameLabel.SetText(conv.Name)
 	cr.previewLabel.SetText(conv.LastMessagePreview)
 	cr.timeLabel.SetText(formatTimestamp(conv.LastMessageTS))
-	cr.avatar.SetText(conv.Name)
+	avatarText := conv.Name
+	if looksLikePhoneNumber(conv.Name) {
+		avatarText = "#"
+	}
+	cr.avatar.SetText(avatarText)
+	if conv.AvatarURL != "" {
+		if tex, err := gdk.NewTextureFromFilename(conv.AvatarURL); err == nil {
+			cr.avatar.SetCustomImage(tex)
+		}
+	}
+}
+
+// looksLikePhoneNumber returns true if the string contains 7+ digits (unsaved contacts).
+func looksLikePhoneNumber(s string) bool {
+	digits := 0
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			digits++
+		}
+	}
+	return digits >= 7
 }
 
 // formatTimestamp converts a millisecond epoch to a human-readable relative time string.

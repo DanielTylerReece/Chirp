@@ -18,6 +18,7 @@ type Conversation struct {
 	IsRCS              bool
 	AvatarURL          string
 	CreatedAt          int64
+	DefaultOutgoingID  string // Participant ID of the "me" SIM for this conversation
 	Participants       []Participant
 }
 
@@ -30,6 +31,7 @@ type Participant struct {
 	PhoneNumber    string
 	IsMe           bool
 	AvatarHexColor string
+	AvatarPath     string // Path to cached avatar JPEG on disk (empty if none)
 }
 
 // boolToInt converts a Go bool to SQLite integer (0/1).
@@ -44,8 +46,8 @@ func boolToInt(b bool) int {
 func (db *DB) UpsertConversation(conv *Conversation) error {
 	_, err := db.Exec(`
 		INSERT INTO conversations (id, name, is_group, last_message_ts, last_message_preview,
-			unread_count, is_pinned, is_archived, is_rcs, avatar_url, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			unread_count, is_pinned, is_archived, is_rcs, avatar_url, created_at, default_outgoing_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name,
 			is_group = excluded.is_group,
@@ -56,10 +58,11 @@ func (db *DB) UpsertConversation(conv *Conversation) error {
 			is_archived = excluded.is_archived,
 			is_rcs = excluded.is_rcs,
 			avatar_url = excluded.avatar_url,
-			created_at = excluded.created_at`,
+			created_at = excluded.created_at,
+			default_outgoing_id = excluded.default_outgoing_id`,
 		conv.ID, conv.Name, boolToInt(conv.IsGroup), conv.LastMessageTS, conv.LastMessagePreview,
 		conv.UnreadCount, boolToInt(conv.IsPinned), boolToInt(conv.IsArchived),
-		boolToInt(conv.IsRCS), conv.AvatarURL, conv.CreatedAt,
+		boolToInt(conv.IsRCS), conv.AvatarURL, conv.CreatedAt, conv.DefaultOutgoingID,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert conversation %s: %w", conv.ID, err)
@@ -73,11 +76,12 @@ func (db *DB) GetConversation(id string) (*Conversation, error) {
 	var isGroup, isPinned, isArchived, isRCS int
 	err := db.QueryRow(`
 		SELECT id, name, is_group, last_message_ts, last_message_preview,
-			unread_count, is_pinned, is_archived, is_rcs, avatar_url, created_at
+			unread_count, is_pinned, is_archived, is_rcs, avatar_url, created_at, default_outgoing_id
 		FROM conversations WHERE id = ?`, id,
 	).Scan(
 		&conv.ID, &conv.Name, &isGroup, &conv.LastMessageTS, &conv.LastMessagePreview,
 		&conv.UnreadCount, &isPinned, &isArchived, &isRCS, &conv.AvatarURL, &conv.CreatedAt,
+		&conv.DefaultOutgoingID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get conversation %s: %w", id, err)
@@ -96,12 +100,19 @@ func (db *DB) GetConversation(id string) (*Conversation, error) {
 }
 
 // ListConversations returns conversations sorted by pinned first, then by last_message_ts DESC.
+// AvatarURL is populated with the first non-me participant's cached avatar path (if any).
 func (db *DB) ListConversations(limit, offset int) ([]Conversation, error) {
 	rows, err := db.Query(`
-		SELECT id, name, is_group, last_message_ts, last_message_preview,
-			unread_count, is_pinned, is_archived, is_rcs, avatar_url, created_at
-		FROM conversations
-		ORDER BY is_pinned DESC, last_message_ts DESC
+		SELECT c.id, c.name, c.is_group, c.last_message_ts, c.last_message_preview,
+			c.unread_count, c.is_pinned, c.is_archived, c.is_rcs,
+			COALESCE((
+				SELECT p.avatar_path FROM participants p
+				WHERE p.conversation_id = c.id AND p.is_me = 0 AND p.avatar_path != ''
+				LIMIT 1
+			), c.avatar_url) AS avatar_url,
+			c.created_at, c.default_outgoing_id
+		FROM conversations c
+		ORDER BY c.is_pinned DESC, c.last_message_ts DESC
 		LIMIT ? OFFSET ?`, limit, offset,
 	)
 	if err != nil {
@@ -116,6 +127,7 @@ func (db *DB) ListConversations(limit, offset int) ([]Conversation, error) {
 		if err := rows.Scan(
 			&c.ID, &c.Name, &isGroup, &c.LastMessageTS, &c.LastMessagePreview,
 			&c.UnreadCount, &isPinned, &isArchived, &isRCS, &c.AvatarURL, &c.CreatedAt,
+			&c.DefaultOutgoingID,
 		); err != nil {
 			return nil, fmt.Errorf("scan conversation: %w", err)
 		}
@@ -169,10 +181,11 @@ func (db *DB) DeleteConversation(id string) error {
 }
 
 // UpsertParticipant inserts or updates a participant.
+// Note: avatar_path is preserved on conflict — it is only set via UpdateParticipantAvatar.
 func (db *DB) UpsertParticipant(p *Participant) error {
 	_, err := db.Exec(`
-		INSERT INTO participants (id, conversation_id, contact_id, name, phone_number, is_me, avatar_hex_color)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO participants (id, conversation_id, contact_id, name, phone_number, is_me, avatar_hex_color, avatar_path)
+		VALUES (?, ?, ?, ?, ?, ?, ?, '')
 		ON CONFLICT(id) DO UPDATE SET
 			conversation_id = excluded.conversation_id,
 			contact_id = excluded.contact_id,
@@ -189,10 +202,39 @@ func (db *DB) UpsertParticipant(p *Participant) error {
 	return nil
 }
 
+// ListParticipantIDsWithoutAvatar returns distinct participant IDs that are not
+// "me" and don't have a cached avatar yet.
+func (db *DB) ListParticipantIDsWithoutAvatar() ([]string, error) {
+	rows, err := db.Query(`SELECT DISTINCT id FROM participants WHERE is_me = 0 AND avatar_path = ''`)
+	if err != nil {
+		return nil, fmt.Errorf("list participant IDs without avatar: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// UpdateParticipantAvatar sets the avatar file path for a participant.
+func (db *DB) UpdateParticipantAvatar(participantID string, path string) error {
+	_, err := db.Exec(`UPDATE participants SET avatar_path = ? WHERE id = ?`, path, participantID)
+	if err != nil {
+		return fmt.Errorf("update participant avatar %s: %w", participantID, err)
+	}
+	return nil
+}
+
 // GetParticipants returns all participants for a conversation.
 func (db *DB) GetParticipants(conversationID string) ([]Participant, error) {
 	rows, err := db.Query(`
-		SELECT id, conversation_id, contact_id, name, phone_number, is_me, avatar_hex_color
+		SELECT id, conversation_id, contact_id, name, phone_number, is_me, avatar_hex_color, avatar_path
 		FROM participants WHERE conversation_id = ?`, conversationID,
 	)
 	if err != nil {
@@ -205,7 +247,7 @@ func (db *DB) GetParticipants(conversationID string) ([]Participant, error) {
 		var p Participant
 		var isMe int
 		if err := rows.Scan(&p.ID, &p.ConversationID, &p.ContactID, &p.Name,
-			&p.PhoneNumber, &isMe, &p.AvatarHexColor); err != nil {
+			&p.PhoneNumber, &isMe, &p.AvatarHexColor, &p.AvatarPath); err != nil {
 			return nil, fmt.Errorf("scan participant: %w", err)
 		}
 		p.IsMe = isMe != 0

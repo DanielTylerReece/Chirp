@@ -11,9 +11,10 @@ import (
 type MessageList struct {
 	*gtk.Box
 
-	scrolled *gtk.ScrolledWindow
-	listBox  *gtk.ListBox
-	rows     []*MessageRow
+	scrolled    *gtk.ScrolledWindow
+	listBox     *gtk.ListBox
+	rows        []*MessageRow
+	mediaLoader func(mediaID string, decryptKey []byte) ([]byte, error)
 }
 
 // NewMessageList creates an empty scrollable message list.
@@ -62,7 +63,7 @@ func (ml *MessageList) SetMessages(msgs []db.Message) {
 		// Determine grouping: same sender within 60 seconds
 		consecutive := msg.ParticipantID == lastSender && (msg.TimestampMS-lastTime) < 60000
 
-		row := NewMessageRow(msg, consecutive)
+		row := NewMessageRow(msg, consecutive, ml.mediaLoader)
 		ml.listBox.Append(row.row)
 		ml.rows = append(ml.rows, row)
 
@@ -82,7 +83,7 @@ func (ml *MessageList) AppendMessage(msg *db.Message) {
 		consecutive = last.participantID == msg.ParticipantID && (msg.TimestampMS-last.timestampMS) < 60000
 	}
 
-	row := NewMessageRow(msg, consecutive)
+	row := NewMessageRow(msg, consecutive, ml.mediaLoader)
 	ml.listBox.Append(row.row)
 	ml.rows = append(ml.rows, row)
 
@@ -94,10 +95,16 @@ func (ml *MessageList) addDateSeparator(timestampMS int64) {
 	now := time.Now()
 
 	var text string
-	if t.YearDay() == now.YearDay() && t.Year() == now.Year() {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	yesterday := today.AddDate(0, 0, -1)
+	msgDay := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+
+	if msgDay.Equal(today) {
 		text = "Today"
-	} else if now.Sub(t) < 48*time.Hour {
+	} else if msgDay.Equal(yesterday) {
 		text = "Yesterday"
+	} else if now.Sub(t) < 7*24*time.Hour {
+		text = t.Format("Monday")
 	} else {
 		text = t.Format("January 2, 2006")
 	}

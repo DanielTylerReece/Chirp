@@ -3,7 +3,7 @@
 /* === Conversation Row === */
 .conversation-row {
     padding: 0;
-    min-height: 68px;
+    min-height: 78px;
 }
 
 .conversation-name {
@@ -14,6 +14,7 @@
 .conversation-preview {
     font-size: 11px;
     opacity: 0.6;
+    /* Allow up to 2 lines of preview text */
 }
 
 .conversation-time {
@@ -29,8 +30,10 @@
     font-weight: bold;
     min-width: 20px;
     min-height: 20px;
-    border-radius: 10px;
+    border-radius: 50px;
     padding: 0 6px;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 /* === Status Banner === */
@@ -122,15 +125,31 @@
     border-radius: 18px;
     padding: 8px 12px;
     min-height: 36px;
+    border: 1px solid alpha(@window_fg_color, 0.2);
+    background-color: alpha(@window_fg_color, 0.04);
 }
 
 .compose-send-button {
-    border-radius: 50%;
+    border-radius: 9999px;
     min-width: 36px;
     min-height: 36px;
+    max-width: 36px;
+    max-height: 36px;
     padding: 0;
+    margin: 0;
     background-color: @accent_bg_color;
     color: @accent_fg_color;
+    -gtk-icon-size: 16px;
+}
+
+/* === SIM Selector === */
+.sim-selector {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    min-height: 24px;
+    background-color: alpha(@accent_bg_color, 0.15);
+    color: @accent_bg_color;
 }
 
 /* === Chat Header === */
@@ -146,4 +165,22 @@
 .chat-header-status {
     font-size: 11px;
     opacity: 0.6;
+}
+
+/* === New Conversation Button === */
+.new-conversation-button {
+    border-radius: 9999px;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0;
+    -gtk-icon-size: 20px;
+}
+
+/* === Contact Chips (New Conversation Dialog) === */
+.contact-chip {
+    background-color: alpha(@accent_bg_color, 0.15);
+    color: @accent_bg_color;
+    border-radius: 16px;
+    padding: 4px 8px;
+    margin: 2px;
 }

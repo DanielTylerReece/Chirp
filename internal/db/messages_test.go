@@ -161,12 +161,12 @@ func TestGetMessagesPagination(t *testing.T) {
 	if len(msgs) != 5 {
 		t.Fatalf("expected 5 messages, got %d", len(msgs))
 	}
-	// Should be DESC order: newest first
-	if msgs[0].TimestampMS != 1900 {
-		t.Errorf("first message timestamp: got %d, want 1900", msgs[0].TimestampMS)
+	// Should be ASC order (chronological): oldest of the latest 5 first
+	if msgs[0].TimestampMS != 1500 {
+		t.Errorf("first message timestamp: got %d, want 1500", msgs[0].TimestampMS)
 	}
-	if msgs[4].TimestampMS != 1500 {
-		t.Errorf("last message timestamp: got %d, want 1500", msgs[4].TimestampMS)
+	if msgs[4].TimestampMS != 1900 {
+		t.Errorf("last message timestamp: got %d, want 1900", msgs[4].TimestampMS)
 	}
 
 	// Get messages before timestamp 1500 (should get msgs with ts 1000-1400)
@@ -177,11 +177,11 @@ func TestGetMessagesPagination(t *testing.T) {
 	if len(msgs2) != 5 {
 		t.Fatalf("expected 5 messages before ts 1500, got %d", len(msgs2))
 	}
-	if msgs2[0].TimestampMS != 1400 {
-		t.Errorf("first message timestamp: got %d, want 1400", msgs2[0].TimestampMS)
+	if msgs2[0].TimestampMS != 1000 {
+		t.Errorf("first message timestamp: got %d, want 1000", msgs2[0].TimestampMS)
 	}
-	if msgs2[4].TimestampMS != 1000 {
-		t.Errorf("last message timestamp: got %d, want 1000", msgs2[4].TimestampMS)
+	if msgs2[4].TimestampMS != 1400 {
+		t.Errorf("last message timestamp: got %d, want 1400", msgs2[4].TimestampMS)
 	}
 }
 

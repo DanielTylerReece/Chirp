@@ -30,12 +30,21 @@ type MockClient struct {
 	StartLoginErr       error
 	SendMessageErr      error
 	SendMediaMessageErr error
-	ListConversationsErr error
-	FetchMessagesErr    error
-	ListContactsErr     error
-	MarkReadErr         error
-	SetTypingErr        error
-	SendReactionErr     error
+	ListConversationsResult []backend.ConversationData
+	ListConversationsErr    error
+	FetchMessagesResult     []backend.MessageData
+	FetchMessagesErr        error
+	ListContactsErr         error
+	MarkReadErr             error
+	SetTypingErr            error
+	SendReactionErr         error
+	DownloadMediaResult                []byte
+	DownloadMediaErr                   error
+	FetchParticipantThumbnailsResult   map[string][]byte
+	FetchParticipantThumbnailsErr      error
+	SIMsResult                         []backend.SIMInfo
+	GetOrCreateConvResult   string
+	GetOrCreateConvErr      error
 }
 
 // NewMockClient returns a MockClient with sensible defaults.
@@ -115,24 +124,29 @@ func (m *MockClient) SetEventHandler(handler func(evt any)) {
 	m.eventHandler = handler
 }
 
-func (m *MockClient) ListConversations(count int) error {
+func (m *MockClient) ListConversations(count int) ([]backend.ConversationData, error) {
 	m.record("ListConversations", count)
-	return m.ListConversationsErr
+	return m.ListConversationsResult, m.ListConversationsErr
 }
 
-func (m *MockClient) FetchMessages(conversationID string, count int64) error {
+func (m *MockClient) FetchMessages(conversationID string, count int64) ([]backend.MessageData, error) {
 	m.record("FetchMessages", conversationID, count)
-	return m.FetchMessagesErr
+	return m.FetchMessagesResult, m.FetchMessagesErr
 }
 
-func (m *MockClient) SendMessage(conversationID string, text string) error {
-	m.record("SendMessage", conversationID, text)
+func (m *MockClient) SendMessage(conversationID string, text string, simNumber int32) error {
+	m.record("SendMessage", conversationID, text, simNumber)
 	return m.SendMessageErr
 }
 
-func (m *MockClient) SendMediaMessage(conversationID string, text string, mediaData []byte, fileName string, mimeType string) error {
-	m.record("SendMediaMessage", conversationID, text, mediaData, fileName, mimeType)
+func (m *MockClient) SendMediaMessage(conversationID string, text string, mediaData []byte, fileName string, mimeType string, simNumber int32) error {
+	m.record("SendMediaMessage", conversationID, text, mediaData, fileName, mimeType, simNumber)
 	return m.SendMediaMessageErr
+}
+
+func (m *MockClient) GetSIMs() []backend.SIMInfo {
+	m.record("GetSIMs")
+	return m.SIMsResult
 }
 
 func (m *MockClient) ListContacts() error {
@@ -153,6 +167,21 @@ func (m *MockClient) SetTyping(conversationID string) error {
 func (m *MockClient) SendReaction(messageID string, emoji string) error {
 	m.record("SendReaction", messageID, emoji)
 	return m.SendReactionErr
+}
+
+func (m *MockClient) DownloadMedia(mediaID string, decryptKey []byte) ([]byte, error) {
+	m.record("DownloadMedia", mediaID, decryptKey)
+	return m.DownloadMediaResult, m.DownloadMediaErr
+}
+
+func (m *MockClient) FetchParticipantThumbnails(participantIDs []string) (map[string][]byte, error) {
+	m.record("FetchParticipantThumbnails", participantIDs)
+	return m.FetchParticipantThumbnailsResult, m.FetchParticipantThumbnailsErr
+}
+
+func (m *MockClient) GetOrCreateConversation(numbers []string) (string, error) {
+	m.record("GetOrCreateConversation", numbers)
+	return m.GetOrCreateConvResult, m.GetOrCreateConvErr
 }
 
 // --- Test helpers ---

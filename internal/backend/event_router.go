@@ -17,6 +17,10 @@ type EventRouter struct {
 	OnPairSuccess func()
 	// Callback when a fatal listen error occurs (requires re-pair).
 	OnFatalError func(error)
+	// Callback when settings (including SIM info) are received.
+	OnSettings func(*gmproto.Settings)
+	// Callback when a message is received/updated (for persisting to DB).
+	OnMessage func(msg *libgm.WrappedMessage)
 }
 
 // NewEventRouter creates an EventRouter bound to the given EventBus.
@@ -35,6 +39,9 @@ func (er *EventRouter) Handle(evt any) {
 		})
 
 	case *libgm.WrappedMessage:
+		if er.OnMessage != nil {
+			er.OnMessage(v)
+		}
 		er.bus.PublishMessage(app.MessageEvent{
 			ConversationID: v.GetConversationID(),
 			MessageID:      v.GetMessageID(),
@@ -94,5 +101,10 @@ func (er *EventRouter) Handle(evt any) {
 			Connected:       true,
 			PhoneResponding: true,
 		})
+
+	case *gmproto.Settings:
+		if er.OnSettings != nil {
+			er.OnSettings(v)
+		}
 	}
 }

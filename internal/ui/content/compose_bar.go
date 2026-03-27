@@ -21,6 +21,13 @@ type SendRequest struct {
 	MediaName string
 	MediaMime string
 	ReplyToID string
+	SIMNumber int32 // 1-indexed SIM slot (0 = use conversation default)
+}
+
+// SIMOption represents one selectable SIM for the compose bar.
+type SIMOption struct {
+	SIMNumber int32
+	Label     string // Short display label (e.g., "US Mobile (865) 320-5104")
 }
 
 // ComposeBar is the message input area at the bottom of the content pane.
@@ -31,6 +38,7 @@ type ComposeBar struct {
 	textView   *gtk.TextView
 	sendButton *gtk.Button
 	attachBtn  *gtk.Button
+	simButton  *gtk.MenuButton // SIM selector dropdown
 
 	// Overlay previews (shown above compose row when active)
 	outerBox          *gtk.Box // vertical: previews + input row
@@ -46,12 +54,18 @@ type ComposeBar struct {
 	replyToID   string
 	replyToText string
 
+	// SIM selection
+	availableSIMs []SIMOption
+	selectedSIM   int // index into availableSIMs, -1 = none/default
+
 	onSend func(req SendRequest)
 }
 
 // NewComposeBar creates the compose bar with text input and send button.
 func NewComposeBar() *ComposeBar {
-	cb := &ComposeBar{}
+	cb := &ComposeBar{
+		selectedSIM: -1,
+	}
 
 	// Outer vertical box holds preview bars + input row
 	cb.outerBox = gtk.NewBox(gtk.OrientationVertical, 0)
@@ -75,7 +89,7 @@ func NewComposeBar() *ComposeBar {
 	cb.attachmentPreview.SetVisible(false)
 	cb.outerBox.Append(cb.attachmentPreview)
 
-	// Input row (horizontal: attach + text + send)
+	// Input row (horizontal: attach + text + SIM + send)
 	cb.Box = gtk.NewBox(gtk.OrientationHorizontal, 8)
 	cb.Box.SetMarginStart(8)
 	cb.Box.SetMarginEnd(8)
@@ -106,6 +120,15 @@ func NewComposeBar() *ComposeBar {
 	scrolled.SetPropagateNaturalHeight(true)
 	scrolled.SetHExpand(true)
 	cb.Box.Append(scrolled)
+
+	// SIM selector dropdown (hidden by default, shown when multiple SIMs available)
+	cb.simButton = gtk.NewMenuButton()
+	cb.simButton.SetLabel("📱")
+	cb.simButton.AddCSSClass("flat")
+	cb.simButton.AddCSSClass("sim-selector")
+	cb.simButton.SetVisible(false)
+	cb.simButton.SetTooltipText("Select SIM card")
+	cb.Box.Append(cb.simButton)
 
 	// Send button
 	cb.sendButton = gtk.NewButtonFromIconName("go-up-symbolic")
@@ -156,6 +179,7 @@ func (cb *ComposeBar) doSend() {
 		MediaName: cb.attachedName,
 		MediaMime: cb.attachedMime,
 		ReplyToID: cb.replyToID,
+		SIMNumber: cb.SelectedSIMNumber(),
 	}
 
 	if cb.onSend != nil {
@@ -289,4 +313,83 @@ func (cb *ComposeBar) showReplyPreview() {
 // SetText sets the compose text (for drafts).
 func (cb *ComposeBar) SetText(text string) {
 	cb.textView.Buffer().SetText(text)
+}
+
+// SetSIMs configures the available SIMs and selects the default.
+// Builds a popover dropdown listing each SIM. Selecting one updates the active SIM.
+func (cb *ComposeBar) SetSIMs(sims []SIMOption, defaultSIMNumber int32) {
+	cb.availableSIMs = sims
+	cb.selectedSIM = -1
+
+	if len(sims) < 2 {
+		cb.simButton.SetVisible(false)
+		if len(sims) == 1 {
+			cb.selectedSIM = 0
+		}
+		return
+	}
+
+	// Find the default SIM
+	for i, s := range sims {
+		if s.SIMNumber == defaultSIMNumber {
+			cb.selectedSIM = i
+			break
+		}
+	}
+	if cb.selectedSIM < 0 {
+		cb.selectedSIM = 0
+	}
+
+	// Build popover with SIM list
+	listBox := gtk.NewListBox()
+	listBox.SetSelectionMode(gtk.SelectionNone)
+
+	for i, sim := range sims {
+		idx := i
+		s := sim
+		row := gtk.NewListBoxRow()
+		label := gtk.NewLabel(s.Label)
+		label.SetXAlign(0)
+		label.SetMarginTop(6)
+		label.SetMarginBottom(6)
+		label.SetMarginStart(12)
+		label.SetMarginEnd(12)
+		row.SetChild(label)
+
+		// Highlight current selection
+		if idx == cb.selectedSIM {
+			row.AddCSSClass("sim-selected")
+		}
+		listBox.Append(row)
+	}
+
+	listBox.ConnectRowActivated(func(row *gtk.ListBoxRow) {
+		cb.selectedSIM = row.Index()
+		cb.updateSIMTooltip()
+		cb.simButton.Popdown()
+	})
+
+	popover := gtk.NewPopover()
+	popover.SetChild(listBox)
+	cb.simButton.SetPopover(popover)
+
+	cb.updateSIMTooltip()
+	cb.simButton.SetVisible(true)
+}
+
+// updateSIMTooltip refreshes the SIM button tooltip with the current selection.
+func (cb *ComposeBar) updateSIMTooltip() {
+	if cb.selectedSIM < 0 || cb.selectedSIM >= len(cb.availableSIMs) {
+		return
+	}
+	sim := cb.availableSIMs[cb.selectedSIM]
+	cb.simButton.SetTooltipText("SIM: " + sim.Label)
+}
+
+// SelectedSIMNumber returns the currently selected SIM number (0 if none).
+func (cb *ComposeBar) SelectedSIMNumber() int32 {
+	if cb.selectedSIM < 0 || cb.selectedSIM >= len(cb.availableSIMs) {
+		return 0
+	}
+	return cb.availableSIMs[cb.selectedSIM].SIMNumber
 }

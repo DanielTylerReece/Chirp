@@ -9,9 +9,10 @@ import (
 type Sidebar struct {
 	*gtk.Box // main container
 
-	listBox    *gtk.ListBox
-	rows       map[string]*ConversationRow // keyed by conversation ID
-	onSelected func(convID string)
+	listBox           *gtk.ListBox
+	rows              map[string]*ConversationRow // keyed by conversation ID
+	onSelected        func(convID string)
+	onNewConversation func()
 }
 
 // NewSidebar creates the conversation list sidebar.
@@ -33,17 +34,31 @@ func NewSidebar() *Sidebar {
 		if row == nil || s.onSelected == nil {
 			return
 		}
-		// Find which conversation this row belongs to
-		for id, cr := range s.rows {
-			if cr.row == row {
-				s.onSelected(id)
-				return
-			}
+		// Use the row's Name property to find the conversation ID
+		convID := row.Name()
+		if convID != "" {
+			s.onSelected(convID)
 		}
 	})
 
 	scrolled.SetChild(s.listBox)
 	s.Append(scrolled)
+
+	// New conversation button (blue circle at bottom of sidebar)
+	newBtn := gtk.NewButtonFromIconName("list-add-symbolic")
+	newBtn.AddCSSClass("new-conversation-button")
+	newBtn.AddCSSClass("suggested-action")
+	newBtn.SetHAlign(gtk.AlignStart)
+	newBtn.SetMarginStart(12)
+	newBtn.SetMarginBottom(12)
+	newBtn.SetMarginTop(8)
+	newBtn.SetTooltipText("New Conversation")
+	newBtn.ConnectClicked(func() {
+		if s.onNewConversation != nil {
+			s.onNewConversation()
+		}
+	})
+	s.Append(newBtn)
 
 	return s
 }
@@ -51,6 +66,11 @@ func NewSidebar() *Sidebar {
 // SetOnConversationSelected registers a callback for conversation selection.
 func (s *Sidebar) SetOnConversationSelected(fn func(convID string)) {
 	s.onSelected = fn
+}
+
+// SetOnNewConversation registers a callback for the new conversation button.
+func (s *Sidebar) SetOnNewConversation(fn func()) {
+	s.onNewConversation = fn
 }
 
 // UpdateConversations replaces the conversation list.

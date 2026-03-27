@@ -34,8 +34,9 @@ func TestOpenMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version query: %v", err)
 	}
-	if version != 1 {
-		t.Errorf("expected schema version 1, got %d", version)
+	expectedVersion := len(migrations)
+	if version != expectedVersion {
+		t.Errorf("expected schema version %d, got %d", expectedVersion, version)
 	}
 
 	// Verify WAL mode
@@ -72,11 +73,12 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Fatalf("second migrate: %v", err)
 	}
 
-	// Verify still version 1
+	// Verify still at latest version
 	var version int
 	db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&version)
-	if version != 1 {
-		t.Errorf("expected schema version 1 after re-migrate, got %d", version)
+	expectedVersion := len(migrations)
+	if version != expectedVersion {
+		t.Errorf("expected schema version %d after re-migrate, got %d", expectedVersion, version)
 	}
 }
 

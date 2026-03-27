@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"sync"
@@ -33,23 +34,60 @@ func NewSyncEngine(client GMClient, database *db.DB, bus *app.EventBus, config *
 // ShallowBackfill fetches recent conversations and messages.
 // Called on every startup after connection.
 func (se *SyncEngine) ShallowBackfill() error {
-	// 1. ListConversations(100) via client
-	// 2. For each conversation: FetchMessages(convID, 50) via client
-	// 3. Store in DB
-	// 4. Emit events
-	//
-	// Note: Since our GMClient interface returns errors (not response objects),
-	// the actual data comes through the event handler (WrappedMessage, Conversation events).
-	// So ShallowBackfill just triggers the fetches — the EventRouter handles storage.
-
 	log.Println("sync: starting shallow backfill")
 
-	if err := se.client.ListConversations(100); err != nil {
+	convs, err := se.client.ListConversations(100)
+	if err != nil {
 		return fmt.Errorf("list conversations: %w", err)
 	}
 
-	// Messages will come through events
-	log.Println("sync: shallow backfill triggered")
+	log.Printf("sync: got %d conversations", len(convs))
+
+	for _, c := range convs {
+		dbConv := &db.Conversation{
+			ID:                 c.ID,
+			Name:               c.Name,
+			IsGroup:            c.IsGroup,
+			LastMessageTS:      c.LastMessageTS,
+			LastMessagePreview: c.LastMessagePreview,
+			IsPinned:           c.IsPinned,
+			IsArchived:         c.IsArchived,
+			IsRCS:              c.IsRCS,
+			DefaultOutgoingID:  c.DefaultOutgoingID,
+		}
+		if c.Unread {
+			dbConv.UnreadCount = 1 // We don't know exact count; flag as unread
+		}
+
+		if err := se.db.UpsertConversation(dbConv); err != nil {
+			log.Printf("sync: upsert conversation %s: %v", c.ID, err)
+			continue
+		}
+
+		// Upsert participants
+		for _, p := range c.Participants {
+			participant := &db.Participant{
+				ID:             p.ID,
+				ConversationID: c.ID,
+				Name:           p.Name,
+				PhoneNumber:    p.PhoneNumber,
+				IsMe:           p.IsMe,
+				AvatarHexColor: p.AvatarHexColor,
+			}
+			if p.ContactID != "" {
+				participant.ContactID = sql.NullString{String: p.ContactID, Valid: true}
+			}
+			if err := se.db.UpsertParticipant(participant); err != nil {
+				// FK errors are expected for group chat participants
+				// whose conversation_id references aren't in our DB yet
+			}
+		}
+	}
+
+	// Emit a single event so the UI refreshes the conversation list
+	se.bus.PublishConversation(app.ConversationEvent{ConversationID: "all"})
+
+	log.Println("sync: shallow backfill complete")
 	return nil
 }
 
@@ -64,8 +102,75 @@ func (se *SyncEngine) DeepBackfill() error {
 	log.Println("sync: starting deep backfill")
 
 	// Phase 1: Fetch all conversations
-	if err := se.client.ListConversations(1000); err != nil {
+	convs, err := se.client.ListConversations(1000)
+	if err != nil {
 		return fmt.Errorf("deep backfill conversations: %w", err)
+	}
+
+	for _, c := range convs {
+		dbConv := &db.Conversation{
+			ID:                 c.ID,
+			Name:               c.Name,
+			IsGroup:            c.IsGroup,
+			LastMessageTS:      c.LastMessageTS,
+			LastMessagePreview: c.LastMessagePreview,
+			IsPinned:           c.IsPinned,
+			IsArchived:         c.IsArchived,
+			IsRCS:              c.IsRCS,
+			DefaultOutgoingID:  c.DefaultOutgoingID,
+		}
+		if c.Unread {
+			dbConv.UnreadCount = 1
+		}
+		if err := se.db.UpsertConversation(dbConv); err != nil {
+			log.Printf("sync: deep upsert conversation %s: %v", c.ID, err)
+			continue
+		}
+
+		for _, p := range c.Participants {
+			participant := &db.Participant{
+				ID:             p.ID,
+				ConversationID: c.ID,
+				Name:           p.Name,
+				PhoneNumber:    p.PhoneNumber,
+				IsMe:           p.IsMe,
+				AvatarHexColor: p.AvatarHexColor,
+			}
+			if p.ContactID != "" {
+				participant.ContactID = sql.NullString{String: p.ContactID, Valid: true}
+			}
+			if err := se.db.UpsertParticipant(participant); err != nil {
+				log.Printf("sync: deep upsert participant %s: %v", p.ID, err)
+			}
+		}
+
+		// Fetch messages for each conversation
+		msgs, err := se.client.FetchMessages(c.ID, 50)
+		if err != nil {
+			log.Printf("sync: deep fetch messages for %s: %v", c.ID, err)
+			continue
+		}
+		for _, m := range msgs {
+			dbMsg := &db.Message{
+				ID:             m.ID,
+				ConversationID: m.ConversationID,
+				ParticipantID:  m.ParticipantID,
+				Body:           m.Body,
+				TimestampMS:    m.TimestampMS,
+				IsFromMe:       m.IsFromMe,
+				Status:         m.Status,
+				MediaID:        m.MediaID,
+				MediaMimeType:  m.MediaMimeType,
+				MediaSize:      m.MediaSize,
+				MediaWidth:     m.MediaWidth,
+				MediaHeight:    m.MediaHeight,
+				ThumbnailID:    m.ThumbnailID,
+				ReplyToID:      m.ReplyToID,
+			}
+			if err := se.db.UpsertMessage(dbMsg); err != nil {
+				log.Printf("sync: deep upsert message %s: %v", m.ID, err)
+			}
+		}
 	}
 
 	// Phase 2: Fetch all contacts
@@ -74,7 +179,9 @@ func (se *SyncEngine) DeepBackfill() error {
 		// Non-fatal, continue
 	}
 
-	log.Println("sync: deep backfill triggered")
+	se.bus.PublishConversation(app.ConversationEvent{ConversationID: "all"})
+
+	log.Println("sync: deep backfill complete")
 	return nil
 }
 

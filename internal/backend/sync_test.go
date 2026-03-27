@@ -32,6 +32,77 @@ func TestShallowBackfill(t *testing.T) {
 	}
 }
 
+func TestShallowBackfillStoresData(t *testing.T) {
+	mock := testutil.NewMockClient()
+	mock.ListConversationsResult = []backend.ConversationData{
+		{
+			ID:                 "conv-1",
+			Name:               "Alice",
+			IsGroup:            false,
+			LastMessageTS:      1711000000000,
+			LastMessagePreview: "Hey there!",
+			Unread:             true,
+			Participants: []backend.ParticipantData{
+				{ID: "p-1", Name: "Alice", PhoneNumber: "+15551234567", IsMe: false},
+				{ID: "p-2", Name: "Me", PhoneNumber: "+15559876543", IsMe: true},
+			},
+		},
+		{
+			ID:      "conv-2",
+			Name:    "Work Group",
+			IsGroup: true,
+		},
+	}
+
+	database, err := db.OpenMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	bus := app.NewEventBus()
+	config := app.NewConfig()
+
+	se := backend.NewSyncEngine(mock, database, bus, config)
+
+	if err := se.ShallowBackfill(); err != nil {
+		t.Fatalf("ShallowBackfill: %v", err)
+	}
+
+	// Verify conversations stored in DB
+	convs, err := database.ListConversations(10, 0)
+	if err != nil {
+		t.Fatalf("ListConversations: %v", err)
+	}
+	if len(convs) != 2 {
+		t.Fatalf("expected 2 conversations, got %d", len(convs))
+	}
+
+	// Verify first conversation details
+	conv, err := database.GetConversation("conv-1")
+	if err != nil {
+		t.Fatalf("GetConversation: %v", err)
+	}
+	if conv.Name != "Alice" {
+		t.Errorf("expected name 'Alice', got %q", conv.Name)
+	}
+	if conv.LastMessagePreview != "Hey there!" {
+		t.Errorf("expected preview 'Hey there!', got %q", conv.LastMessagePreview)
+	}
+	if conv.UnreadCount != 1 {
+		t.Errorf("expected unread count 1, got %d", conv.UnreadCount)
+	}
+
+	// Verify participants stored
+	participants, err := database.GetParticipants("conv-1")
+	if err != nil {
+		t.Fatalf("GetParticipants: %v", err)
+	}
+	if len(participants) != 2 {
+		t.Fatalf("expected 2 participants, got %d", len(participants))
+	}
+}
+
 func TestDeepBackfillOnlyOnce(t *testing.T) {
 	mock := testutil.NewMockClient()
 	database, err := db.OpenMemory()

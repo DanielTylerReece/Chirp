@@ -97,10 +97,12 @@ func (db *DB) GetMessages(conversationID string, limit int, beforeTimestamp int6
 				is_from_me, status, media_id, media_mime_type, media_decrypt_key,
 				media_size, media_width, media_height, thumbnail_id, thumbnail_key,
 				reply_to_id, reactions
-			FROM messages
-			WHERE conversation_id = ?
-			ORDER BY timestamp_ms DESC
-			LIMIT ?`, conversationID, limit,
+			FROM (
+				SELECT * FROM messages
+				WHERE conversation_id = ?
+				ORDER BY timestamp_ms DESC
+				LIMIT ?
+			) sub ORDER BY timestamp_ms ASC`, conversationID, limit,
 		)
 	} else {
 		rows, err = db.Query(`
@@ -108,10 +110,12 @@ func (db *DB) GetMessages(conversationID string, limit int, beforeTimestamp int6
 				is_from_me, status, media_id, media_mime_type, media_decrypt_key,
 				media_size, media_width, media_height, thumbnail_id, thumbnail_key,
 				reply_to_id, reactions
-			FROM messages
-			WHERE conversation_id = ? AND timestamp_ms < ?
-			ORDER BY timestamp_ms DESC
-			LIMIT ?`, conversationID, beforeTimestamp, limit,
+			FROM (
+				SELECT * FROM messages
+				WHERE conversation_id = ? AND timestamp_ms < ?
+				ORDER BY timestamp_ms DESC
+				LIMIT ?
+			) sub ORDER BY timestamp_ms ASC`, conversationID, beforeTimestamp, limit,
 		)
 	}
 	if err != nil {

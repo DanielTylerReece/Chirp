@@ -1,58 +1,130 @@
-# GMessage
+<p align="center">
+  <img src="data/com.github.gmessage.svg" width="128" height="128" alt="Chirp icon"/>
+</p>
 
-Native GTK4/libadwaita Google Messages client for GNOME. Pairs with your Android phone to send and receive SMS/RCS messages from your desktop.
+<h1 align="center">Chirp</h1>
 
-Built on [libgm](https://github.com/mautrix/gmessages) (the mautrix Google Messages protocol library).
+<p align="center">
+  <strong>A native Google Messages client for GNOME</strong>
+</p>
+
+<p align="center">
+  Pair your Android phone and send/receive SMS & RCS messages right from your Linux desktop — no browser, no Electron, just a clean GTK4 app that feels at home on GNOME.
+</p>
+
+---
 
 ## Features
 
-- Native GNOME desktop app (GTK4 + libadwaita)
-- iMessage-style chat bubbles
-- Contact photos from Google contacts
-- Full-text message search
-- Desktop notifications
-- Media sending (photos, files)
-- Reply threading and reactions
-- Typing indicators and read receipts
-- Background daemon for always-on notifications
-- Session stored in GNOME Keyring
-- Local SQLite database with offline access
+- **Native GNOME experience** — GTK4 + libadwaita, follows system theme and accent colors
+- **iMessage-style chat bubbles** — sent/received alignment, delivery status indicators, timestamps
+- **QR code pairing** — scan once from Google Messages on your phone, just like the web client
+- **Inline media** — send and receive images with click-to-expand fullscreen viewer
+- **Dual-SIM support** — pick which SIM to send from per-conversation
+- **Instant startup** — local SQLite cache loads conversations immediately, syncs in background
+- **Real-time delivery** — messages appear as they arrive, status updates from sending to delivered
+- **New conversations** — start chats with contact search and phone number entry
+- **Desktop notifications** — background daemon keeps you connected when the window is closed
+- **Session stored in GNOME Keyring** — credentials never touch plaintext on disk
+- **Offline access** — read your full message history without a connection
+
+## Screenshots
+
+> *Coming soon*
 
 ## Requirements
 
-- GTK4 4.12+
-- libadwaita 1.4+
-- Go 1.25+ (build only)
-- Android phone with Google Messages
+| Dependency | Version |
+|---|---|
+| GTK4 | 4.12+ |
+| libadwaita | 1.4+ |
+| Go | 1.22+ (build only) |
+| Android phone | Google Messages app |
 
-## Build
+### Fedora / RHEL
 
 ```bash
-go build -o gmessage .
+sudo dnf install gtk4-devel libadwaita-devel gcc
 ```
 
-## Install
+### Arch / CachyOS
 
 ```bash
+sudo pacman -S gtk4 libadwaita go
+```
+
+### Ubuntu / Debian
+
+```bash
+sudo apt install libgtk-4-dev libadwaita-1-dev gcc golang-go
+```
+
+## Build & Install
+
+```bash
+git clone https://github.com/DanielTylerReece/Chirp.git
+cd Chirp
 make install
 ```
 
-Or on Arch Linux:
+This installs the binary to `~/.local/bin/`, the desktop entry, icon, and GSettings schema to the appropriate XDG directories.
+
+Or just build without installing:
+
 ```bash
-cd packaging/aur && makepkg -si
+make build
+./gmessage
 ```
 
 ## Usage
 
-1. Run `gmessage`
-2. Pair with your phone (scan QR code from Google Messages → Settings → Device pairing)
+1. Launch **Chirp** from your app grid or run `gmessage`
+2. Scan the QR code with your phone:
+   **Google Messages** > **Settings** > **Device pairing** > **QR code scanner**
 3. Start messaging
 
-For background notifications:
+### Background notifications
+
 ```bash
 systemctl --user enable --now gmessage-daemon
 ```
 
+### Log out
+
+Use the **three-dot menu** in the top-left corner > **Log out** to unpair and clear your session.
+
+## How it works
+
+Chirp uses [libgm](https://github.com/mautrix/gmessages) — the same protocol library that powers the [mautrix-gmessages](https://github.com/mautrix/gmessages) Matrix bridge. It communicates with Google's servers through a long-polling relay, acting as an additional paired device alongside your phone.
+
+Your phone must remain on and connected to the internet for messages to flow. This is the same model as Google Messages for Web.
+
+## Project structure
+
+```
+main.go                      App entry point and wiring
+internal/
+  app/                       Config, event bus
+  backend/                   libgm client wrapper, session, contacts, sync
+  controller/                App lifecycle, pairing flow
+  daemon/                    Background notification service
+  db/                        SQLite schema, migrations, CRUD
+  ui/
+    sidebar/                 Conversation list
+    content/                 Message display, compose bar, media viewer
+    pairing/                 QR code dialog
+    newconversation/         New chat dialog
+    preferences/             Settings dialog
+style/style.css              GTK4 stylesheet
+data/                        Desktop entry, icon, systemd unit
+```
+
 ## License
 
-AGPL-3.0-or-later (required by libgm dependency)
+AGPL-3.0-or-later (required by the libgm dependency)
+
+## Acknowledgments
+
+- [mautrix/gmessages](https://github.com/mautrix/gmessages) — the libgm protocol library that makes this possible
+- [gotk4](https://github.com/diamondburned/gotk4) — Go bindings for GTK4
+- [gotk4-adwaita](https://github.com/diamondburned/gotk4-adwaita) — Go bindings for libadwaita

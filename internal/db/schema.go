@@ -84,6 +84,14 @@ CREATE TABLE IF NOT EXISTS media_cache (
 );
 `,
 	},
+	{
+		version: 2,
+		sql:     `ALTER TABLE conversations ADD COLUMN default_outgoing_id TEXT NOT NULL DEFAULT '';`,
+	},
+	{
+		version: 3,
+		sql:     `ALTER TABLE participants ADD COLUMN avatar_path TEXT NOT NULL DEFAULT '';`,
+	},
 }
 
 func (db *DB) migrate() error {

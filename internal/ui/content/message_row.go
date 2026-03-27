@@ -1,8 +1,11 @@
 package content
 
 import (
+	"log"
+	"strings"
 	"time"
 
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/tyler/gmessage/internal/db"
@@ -20,7 +23,7 @@ type MessageRow struct {
 }
 
 // NewMessageRow creates a chat bubble for a message.
-func NewMessageRow(msg *db.Message, consecutive bool) *MessageRow {
+func NewMessageRow(msg *db.Message, consecutive bool, mediaLoader func(string, []byte) ([]byte, error)) *MessageRow {
 	mr := &MessageRow{
 		participantID: msg.ParticipantID,
 		timestampMS:   msg.TimestampMS,
@@ -68,8 +71,39 @@ func NewMessageRow(msg *db.Message, consecutive bool) *MessageRow {
 		mr.bubble.Append(mr.bodyLabel)
 	}
 
-	// Media placeholder
-	if msg.MediaID != "" {
+	// Media display
+	if msg.MediaID != "" && mediaLoader != nil {
+		mw := NewMediaWidget()
+		mw.SetLoading(true)
+		mr.bubble.Append(mw.Box)
+
+		mediaID := msg.MediaID
+		decryptKey := msg.MediaDecryptKey
+		mimeType := msg.MediaMimeType
+		go func() {
+			data, err := mediaLoader(mediaID, decryptKey)
+			if err != nil {
+				log.Printf("load media %s: %v", mediaID, err)
+				return
+			}
+			glib.IdleAdd(func() {
+				mw.LoadFromBytes(data, mimeType)
+				mw.SetLoading(false)
+
+				// Make image clickable — opens fullscreen viewer with save option
+				if isImageMime(mimeType) {
+					gesture := gtk.NewGestureClick()
+					imageData := data // capture for closure
+					imageMime := mimeType
+					gesture.ConnectReleased(func(nPress int, x, y float64) {
+						showImageViewer(mr.row, imageData, imageMime)
+					})
+					mw.picture.AddController(gesture)
+					mw.picture.SetCursorFromName("pointer")
+				}
+			})
+		}()
+	} else if msg.MediaID != "" {
 		mediaLabel := gtk.NewLabel("[Media: " + msg.MediaMimeType + "]")
 		mediaLabel.AddCSSClass("media-placeholder")
 		mr.bubble.Append(mediaLabel)
@@ -127,4 +161,9 @@ func statusIcon(status int) string {
 	default:
 		return ""
 	}
+}
+
+// isImageMime returns true if the MIME type is a displayable image format.
+func isImageMime(mimeType string) bool {
+	return strings.HasPrefix(mimeType, "image/")
 }

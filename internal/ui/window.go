@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/tyler/gmessage/internal/app"
@@ -23,12 +24,13 @@ type Window struct {
 	// Callbacks for shortcut-triggered actions
 	onShowPreferences func()
 	onNewConversation func()
+	onLogout          func()
 }
 
 // NewWindow builds the main window widget tree and returns a Window.
 func NewWindow(application *gtk.Application, cfg *app.Config) *Window {
 	win := adw.NewApplicationWindow(application)
-	win.SetTitle("GMessage")
+	win.SetTitle("Chirp")
 
 	// Restore saved window state
 	state := cfg.LoadWindowState()
@@ -40,11 +42,23 @@ func NewWindow(application *gtk.Application, cfg *app.Config) *Window {
 	// --- Sidebar pane ---
 	sb := sidebar.NewSidebar()
 
+	// Three-dot menu for sidebar header
+	menu := gio.NewMenu()
+	menu.Append("Log out", "win.logout")
+
+	menuBtn := gtk.NewMenuButton()
+	menuBtn.SetIconName("open-menu-symbolic")
+	menuBtn.AddCSSClass("flat")
+	menuBtn.SetMenuModel(menu)
+
+	sidebarHeader := adw.NewHeaderBar()
+	sidebarHeader.PackEnd(menuBtn)
+
 	sidebarToolbar := adw.NewToolbarView()
-	sidebarToolbar.AddTopBar(adw.NewHeaderBar())
+	sidebarToolbar.AddTopBar(sidebarHeader)
 	sidebarToolbar.SetContent(sb.Box)
 
-	sidebarPage := adw.NewNavigationPage(sidebarToolbar, "GMessage")
+	sidebarPage := adw.NewNavigationPage(sidebarToolbar, "Chirp")
 
 	// --- Content pane ---
 	ct := content.NewContent()
@@ -67,6 +81,15 @@ func NewWindow(application *gtk.Application, cfg *app.Config) *Window {
 		content:   ct,
 		config:    cfg,
 	}
+
+	// Register "logout" action for the menu
+	logoutAction := gio.NewSimpleAction("logout", nil)
+	logoutAction.ConnectActivate(func(_ *glib.Variant) {
+		if w.onLogout != nil {
+			w.onLogout()
+		}
+	})
+	win.AddAction(logoutAction)
 
 	w.setupKeyboardShortcuts()
 	w.setupWindowStatePersistence()
@@ -158,9 +181,15 @@ func (w *Window) SetOnShowPreferences(fn func()) {
 	w.onShowPreferences = fn
 }
 
-// SetOnNewConversation sets the callback for Ctrl+N.
+// SetOnLogout sets the callback for the logout menu action.
+func (w *Window) SetOnLogout(fn func()) {
+	w.onLogout = fn
+}
+
+// SetOnNewConversation sets the callback for Ctrl+N and the sidebar (+) button.
 func (w *Window) SetOnNewConversation(fn func()) {
 	w.onNewConversation = fn
+	w.sidebar.SetOnNewConversation(fn)
 }
 
 // Present shows the window.
@@ -178,6 +207,11 @@ func (w *Window) SetOnConversationSelected(fn func(convID string)) {
 	w.sidebar.SetOnConversationSelected(fn)
 }
 
+// SelectConversation highlights a conversation row in the sidebar.
+func (w *Window) SelectConversation(id string) {
+	w.sidebar.SelectConversation(id)
+}
+
 // UpdateConversations updates the sidebar conversation list.
 func (w *Window) UpdateConversations(convs []db.Conversation) {
 	w.sidebar.UpdateConversations(convs)
@@ -193,7 +227,22 @@ func (w *Window) SetConversation(conv *db.Conversation) {
 	w.content.SetConversation(conv)
 }
 
+// SetMediaLoader sets the function used to download media for display.
+func (w *Window) SetMediaLoader(fn func(mediaID string, decryptKey []byte) ([]byte, error)) {
+	w.content.SetMediaLoader(fn)
+}
+
 // SetOnSend sets the callback for sending messages.
 func (w *Window) SetOnSend(fn func(convID string, req content.SendRequest)) {
 	w.content.SetOnSend(fn)
+}
+
+// ActiveConversationID returns the currently displayed conversation ID.
+func (w *Window) ActiveConversationID() string {
+	return w.content.ActiveConversationID()
+}
+
+// SetSIMs configures the SIM selector in the compose bar.
+func (w *Window) SetSIMs(sims []content.SIMOption, defaultSIMNumber int32) {
+	w.content.SetSIMs(sims, defaultSIMNumber)
 }

@@ -26,7 +26,8 @@ type Content struct {
 	activeConvID string
 
 	// Callbacks
-	onSend func(convID string, req SendRequest)
+	onSend      func(convID string, req SendRequest)
+	mediaLoader func(mediaID string, decryptKey []byte) ([]byte, error) // downloads media
 }
 
 // NewContent creates the content area with header, message list, and compose bar.
@@ -87,6 +88,17 @@ func (c *Content) SetConversation(conv *db.Conversation) {
 	} else {
 		c.headerStatus.SetText("SMS")
 	}
+}
+
+// SetSIMs configures the SIM selector in the compose bar.
+func (c *Content) SetSIMs(sims []SIMOption, defaultSIMNumber int32) {
+	c.composeBar.SetSIMs(sims, defaultSIMNumber)
+}
+
+// SetMediaLoader sets the function used to download media for display.
+func (c *Content) SetMediaLoader(fn func(mediaID string, decryptKey []byte) ([]byte, error)) {
+	c.mediaLoader = fn
+	c.messageList.mediaLoader = fn
 }
 
 // SetMessages populates the message list.
