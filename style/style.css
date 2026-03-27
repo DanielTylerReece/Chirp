@@ -185,6 +185,10 @@
 }
 
 /* === New Conversation Button === */
+.new-conversation-bar {
+    background-color: alpha(@window_bg_color, 0.9);
+}
+
 .new-conversation-button {
     border-radius: 9999px;
     min-width: 48px;

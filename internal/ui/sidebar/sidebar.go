@@ -42,23 +42,33 @@ func NewSidebar() *Sidebar {
 	})
 
 	scrolled.SetChild(s.listBox)
-	s.Append(scrolled)
 
-	// New conversation button (blue circle at bottom of sidebar)
+	// New conversation button in a semi-transparent bar overlaying bottom of list
+	newBtnBar := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	newBtnBar.AddCSSClass("new-conversation-bar")
+	newBtnBar.SetHAlign(gtk.AlignFill)
+	newBtnBar.SetVAlign(gtk.AlignEnd)
+
 	newBtn := gtk.NewButtonFromIconName("list-add-symbolic")
 	newBtn.AddCSSClass("new-conversation-button")
 	newBtn.AddCSSClass("suggested-action")
 	newBtn.SetHAlign(gtk.AlignStart)
 	newBtn.SetMarginStart(12)
-	newBtn.SetMarginBottom(12)
 	newBtn.SetMarginTop(8)
+	newBtn.SetMarginBottom(8)
 	newBtn.SetTooltipText("New Conversation")
 	newBtn.ConnectClicked(func() {
 		if s.onNewConversation != nil {
 			s.onNewConversation()
 		}
 	})
-	s.Append(newBtn)
+	newBtnBar.Append(newBtn)
+
+	overlay := gtk.NewOverlay()
+	overlay.SetChild(scrolled)
+	overlay.AddOverlay(newBtnBar)
+	overlay.SetVExpand(true)
+	s.Append(overlay)
 
 	return s
 }

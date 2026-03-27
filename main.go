@@ -82,25 +82,45 @@ func main() {
 		win.SetOnNewConversation(func() {
 			dlg := newconversation.NewDialog()
 			dlg.SetOnSearch(func(query string) []newconversation.ContactResult {
-				contacts, _ := appCtrl.DB.ListContacts(query)
+				// Search existing conversations by name
+				convs, _ := appCtrl.DB.SearchConversations(query)
 				var results []newconversation.ContactResult
-				for _, c := range contacts {
+				for _, c := range convs {
 					results = append(results, newconversation.ContactResult{
-						Name:        c.Name,
-						PhoneNumber: c.PhoneNumber,
+						Name:           c.Name,
+						PhoneNumber:    c.Name, // used as fallback display
+						ConversationID: c.ID,
 					})
 				}
 				return results
 			})
 			dlg.SetOnCreate(func(contacts []newconversation.ContactResult) {
 				go func() {
+					// If selecting an existing conversation, open it directly
+					if len(contacts) == 1 && contacts[0].ConversationID != "" {
+						convID := contacts[0].ConversationID
+						conv, err := appCtrl.DB.GetConversation(convID)
+						if err == nil && conv != nil {
+							glib.IdleAdd(func() {
+								win.SetConversation(conv)
+								win.SelectConversation(convID)
+							})
+							return
+						}
+					}
+
 					if appCtrl.Client == nil {
 						log.Println("new conversation: not connected")
 						return
 					}
 					var numbers []string
 					for _, c := range contacts {
-						numbers = append(numbers, c.PhoneNumber)
+						if c.ConversationID == "" {
+							numbers = append(numbers, c.PhoneNumber)
+						}
+					}
+					if len(numbers) == 0 {
+						return
 					}
 					convID, err := appCtrl.Client.GetOrCreateConversation(numbers)
 					if err != nil {

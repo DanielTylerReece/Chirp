@@ -9,8 +9,9 @@ import (
 
 // ContactResult represents a contact that can be selected for a new conversation.
 type ContactResult struct {
-	Name        string
-	PhoneNumber string
+	Name           string
+	PhoneNumber    string
+	ConversationID string // if set, opens existing conversation directly
 }
 
 // Dialog is the new-conversation dialog with contact search, selection chips,

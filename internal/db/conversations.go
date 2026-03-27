@@ -255,3 +255,74 @@ func (db *DB) GetParticipants(conversationID string) ([]Participant, error) {
 	}
 	return participants, rows.Err()
 }
+
+// SearchConversations searches conversations by name.
+func (db *DB) SearchConversations(query string) ([]Conversation, error) {
+	like := "%" + query + "%"
+	rows, err := db.Query(`
+		SELECT id, name, last_message_preview, last_message_ts, unread_count,
+			is_pinned, is_archived, is_rcs, avatar_url, created_at, default_outgoing_id, is_group
+		FROM conversations
+		WHERE name LIKE ?
+		ORDER BY last_message_ts DESC
+		LIMIT 20`, like,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("search conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var convs []Conversation
+	for rows.Next() {
+		var c Conversation
+		var isPinned, isArchived, isRCS, isGroup int
+		if err := rows.Scan(&c.ID, &c.Name, &c.LastMessagePreview, &c.LastMessageTS,
+			&c.UnreadCount, &isPinned, &isArchived, &isRCS, &c.AvatarURL, &c.CreatedAt,
+			&c.DefaultOutgoingID, &isGroup); err != nil {
+			return nil, fmt.Errorf("scan conversation: %w", err)
+		}
+		c.IsPinned = isPinned != 0
+		c.IsArchived = isArchived != 0
+		c.IsRCS = isRCS != 0
+		c.IsGroup = isGroup != 0
+		convs = append(convs, c)
+	}
+	return convs, rows.Err()
+}
+
+// SearchRecipients searches participants (excluding "me") by name or phone number.
+// Returns unique results deduplicated by phone number.
+func (db *DB) SearchRecipients(query string) ([]Participant, error) {
+	like := "%" + query + "%"
+	rows, err := db.Query(`
+		SELECT DISTINCT p.id, p.conversation_id, p.contact_id, p.name,
+			p.phone_number, p.is_me, p.avatar_hex_color, p.avatar_path
+		FROM participants p
+		WHERE p.is_me = 0
+			AND p.phone_number <> ''
+			AND (p.name LIKE ? OR p.phone_number LIKE ?)
+		ORDER BY p.name
+		LIMIT 20`, like, like,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("search recipients: %w", err)
+	}
+	defer rows.Close()
+
+	seen := make(map[string]bool)
+	var results []Participant
+	for rows.Next() {
+		var p Participant
+		var isMe int
+		if err := rows.Scan(&p.ID, &p.ConversationID, &p.ContactID, &p.Name,
+			&p.PhoneNumber, &isMe, &p.AvatarHexColor, &p.AvatarPath); err != nil {
+			return nil, fmt.Errorf("scan recipient: %w", err)
+		}
+		p.IsMe = isMe != 0
+		if !seen[p.PhoneNumber] {
+			seen[p.PhoneNumber] = true
+			results = append(results, p)
+		}
+	}
+	return results, rows.Err()
+}
