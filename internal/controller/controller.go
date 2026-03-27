@@ -174,7 +174,7 @@ func (a *App) setupRouter() {
 			ID:             msgID,
 			ConversationID: convID,
 			ParticipantID:  m.GetParticipantID(),
-			TimestampMS:    m.GetTimestamp(),
+			TimestampMS:    m.GetTimestamp() / 1000, // libgm returns microseconds
 		}
 
 		// Status
@@ -193,6 +193,13 @@ func (a *App) setupRouter() {
 				dbMsg.MediaID = media.GetMediaID()
 				dbMsg.MediaMimeType = media.GetMimeType()
 				dbMsg.MediaDecryptKey = media.GetDecryptionKey()
+				dbMsg.MediaSize = media.GetSize()
+				if dims := media.GetDimensions(); dims != nil {
+					dbMsg.MediaWidth = int(dims.GetWidth())
+					dbMsg.MediaHeight = int(dims.GetHeight())
+				}
+				dbMsg.ThumbnailID = media.GetThumbnailMediaID()
+				dbMsg.ThumbnailKey = media.GetThumbnailDecryptionKey()
 			}
 		}
 

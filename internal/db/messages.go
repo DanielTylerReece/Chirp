@@ -167,6 +167,29 @@ func (db *DB) DeleteMessage(id string) error {
 	return nil
 }
 
+// ConversationIDsWithoutMessages returns IDs of conversations that have no messages.
+func (db *DB) ConversationIDsWithoutMessages() ([]string, error) {
+	rows, err := db.Query(`
+		SELECT c.id FROM conversations c
+		LEFT JOIN messages m ON m.conversation_id = c.id
+		GROUP BY c.id
+		HAVING COUNT(m.id) = 0`)
+	if err != nil {
+		return nil, fmt.Errorf("conversation IDs without messages: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // CountMessages returns the total number of messages in a conversation.
 func (db *DB) CountMessages(conversationID string) (int, error) {
 	var count int

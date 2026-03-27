@@ -143,7 +143,7 @@ func (rc *RealClient) ListConversations(count int) ([]ConversationData, error) {
 			ID:                c.GetConversationID(),
 			Name:              c.GetName(),
 			IsGroup:           c.GetIsGroupChat(),
-			LastMessageTS:     c.GetLastMessageTimestamp(),
+			LastMessageTS:     c.GetLastMessageTimestamp() / 1000, // libgm returns microseconds
 			Unread:            c.GetUnread(),
 			IsPinned:          c.Pinned,
 			IsArchived:        c.GetStatus() == gmproto.ConversationStatus_ARCHIVED || c.GetStatus() == gmproto.ConversationStatus_KEEP_ARCHIVED,
@@ -198,7 +198,7 @@ func (rc *RealClient) FetchMessages(conversationID string, count int64) ([]Messa
 			ID:             m.GetMessageID(),
 			ConversationID: m.GetConversationID(),
 			ParticipantID:  m.GetParticipantID(),
-			TimestampMS:    m.GetTimestamp(),
+			TimestampMS:    m.GetTimestamp() / 1000, // libgm returns microseconds
 		}
 
 		// Determine if from me: outgoing statuses are < 100, incoming are >= 100

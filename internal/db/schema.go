@@ -92,6 +92,13 @@ CREATE TABLE IF NOT EXISTS media_cache (
 		version: 3,
 		sql:     `ALTER TABLE participants ADD COLUMN avatar_path TEXT NOT NULL DEFAULT '';`,
 	},
+	{
+		version: 4,
+		sql: `
+UPDATE messages SET timestamp_ms = timestamp_ms / 1000 WHERE timestamp_ms > 1000000000000000;
+UPDATE conversations SET last_message_ts = last_message_ts / 1000 WHERE last_message_ts > 1000000000000000;
+`,
+	},
 }
 
 func (db *DB) migrate() error {

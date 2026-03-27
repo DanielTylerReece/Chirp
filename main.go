@@ -220,6 +220,19 @@ func main() {
 							appCtrl.OnConversationsLoaded(convs)
 						}
 
+						// Backfill messages for empty conversations
+						if err := appCtrl.Sync.BackfillEmptyConversations(); err != nil {
+							log.Printf("backfill empty conversations: %v", err)
+						} else {
+							// Refresh sidebar after backfill
+							convs, err := appCtrl.DB.ListConversations(100, 0)
+							if err == nil {
+								glib.IdleAdd(func() {
+									win.UpdateConversations(convs)
+								})
+							}
+						}
+
 						// Fetch participant avatars in background
 						go func() {
 							ids, err := appCtrl.DB.ListParticipantIDsWithoutAvatar()

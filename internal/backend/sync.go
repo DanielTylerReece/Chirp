@@ -91,6 +91,52 @@ func (se *SyncEngine) ShallowBackfill() error {
 	return nil
 }
 
+// BackfillEmptyConversations fetches messages for conversations that have none.
+func (se *SyncEngine) BackfillEmptyConversations() error {
+	ids, err := se.db.ConversationIDsWithoutMessages()
+	if err != nil {
+		return fmt.Errorf("list empty conversations: %w", err)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	log.Printf("sync: backfilling messages for %d empty conversations", len(ids))
+
+	filled := 0
+	for _, convID := range ids {
+		msgs, err := se.client.FetchMessages(convID, 50)
+		if err != nil {
+			log.Printf("sync: fetch messages for %s: %v", convID, err)
+			continue
+		}
+		for _, m := range msgs {
+			dbMsg := &db.Message{
+				ID:              m.ID,
+				ConversationID:  m.ConversationID,
+				ParticipantID:   m.ParticipantID,
+				Body:            m.Body,
+				TimestampMS:     m.TimestampMS,
+				IsFromMe:        m.IsFromMe,
+				Status:          m.Status,
+				MediaID:         m.MediaID,
+				MediaMimeType:   m.MediaMimeType,
+				MediaDecryptKey: m.MediaDecryptKey,
+				MediaSize:       m.MediaSize,
+				MediaWidth:      m.MediaWidth,
+				MediaHeight:     m.MediaHeight,
+				ThumbnailID:     m.ThumbnailID,
+				ThumbnailKey:    m.ThumbnailKey,
+			}
+			se.db.UpsertMessage(dbMsg)
+		}
+		if len(msgs) > 0 {
+			filled++
+		}
+	}
+	log.Printf("sync: backfilled %d/%d empty conversations", filled, len(ids))
+	return nil
+}
+
 // DeepBackfill fetches ALL conversations and messages.
 // Runs in background, only one at a time.
 func (se *SyncEngine) DeepBackfill() error {
