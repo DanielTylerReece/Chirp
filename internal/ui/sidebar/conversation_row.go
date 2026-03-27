@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
-	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/tyler/gmessage/internal/db"
+	"github.com/tyler/gmessage/internal/ui/shared"
 )
 
 // ConversationRow is a single conversation entry in the sidebar list.
@@ -41,16 +41,8 @@ func NewConversationRow(conv *db.Conversation) *ConversationRow {
 	hbox.SetMarginEnd(12)
 
 	// Avatar — show contact photo if cached, fallback to initials or "#"
-	avatarText := conv.Name
-	if looksLikePhoneNumber(conv.Name) {
-		avatarText = "#"
-	}
-	cr.avatar = adw.NewAvatar(40, avatarText, true)
-	if conv.AvatarURL != "" {
-		if tex, err := gdk.NewTextureFromFilename(conv.AvatarURL); err == nil {
-			cr.avatar.SetCustomImage(tex)
-		}
-	}
+	cr.avatar = adw.NewAvatar(40, "", true)
+	shared.ConfigureAvatar(cr.avatar, conv.Name, conv.AvatarURL)
 	hbox.Append(cr.avatar)
 
 	// Right side: name/time on top, preview/badge on bottom
@@ -103,27 +95,7 @@ func (cr *ConversationRow) Update(conv *db.Conversation) {
 	cr.nameLabel.SetText(conv.Name)
 	cr.previewLabel.SetText(conv.LastMessagePreview)
 	cr.timeLabel.SetText(formatTimestamp(conv.LastMessageTS))
-	avatarText := conv.Name
-	if looksLikePhoneNumber(conv.Name) {
-		avatarText = "#"
-	}
-	cr.avatar.SetText(avatarText)
-	if conv.AvatarURL != "" {
-		if tex, err := gdk.NewTextureFromFilename(conv.AvatarURL); err == nil {
-			cr.avatar.SetCustomImage(tex)
-		}
-	}
-}
-
-// looksLikePhoneNumber returns true if the string contains 7+ digits (unsaved contacts).
-func looksLikePhoneNumber(s string) bool {
-	digits := 0
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			digits++
-		}
-	}
-	return digits >= 7
+	shared.ConfigureAvatar(cr.avatar, conv.Name, conv.AvatarURL)
 }
 
 // formatTimestamp converts a millisecond epoch to a human-readable relative time string.

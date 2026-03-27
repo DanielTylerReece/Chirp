@@ -100,8 +100,6 @@ Use the **three-dot menu** in the top-left corner > **Log out** to unpair and cl
 
 Chirp uses [libgm](https://github.com/mautrix/gmessages) — the same protocol library that powers the [mautrix-gmessages](https://github.com/mautrix/gmessages) Matrix bridge. It communicates with Google's servers through a long-polling relay, acting as an additional paired device alongside your phone.
 
-Your phone must remain on and connected to the internet for messages to flow. This is the same model as Google Messages for Web.
-
 ## Project structure
 
 ```

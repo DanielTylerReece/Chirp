@@ -4,6 +4,7 @@ import (
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/tyler/gmessage/internal/db"
+	"github.com/tyler/gmessage/internal/ui/shared"
 )
 
 // Content is the right pane showing messages for the selected conversation.
@@ -82,7 +83,8 @@ func NewContent() *Content {
 func (c *Content) SetConversation(conv *db.Conversation) {
 	c.activeConvID = conv.ID
 	c.headerName.SetText(conv.Name)
-	c.headerAvatar.SetText(conv.Name)
+	shared.ConfigureAvatar(c.headerAvatar, conv.Name, conv.AvatarURL)
+
 	if conv.IsRCS {
 		c.headerStatus.SetText("RCS")
 	} else {

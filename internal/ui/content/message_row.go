@@ -71,14 +71,21 @@ func NewMessageRow(msg *db.Message, consecutive bool, mediaLoader func(string, [
 		mr.bubble.Append(mr.bodyLabel)
 	}
 
-	// Media display
-	if msg.MediaID != "" && mediaLoader != nil {
+	// Media display — try media_id first, fall back to thumbnail_id
+	displayMediaID := msg.MediaID
+	displayDecryptKey := msg.MediaDecryptKey
+	if displayMediaID == "" && msg.ThumbnailID != "" {
+		displayMediaID = msg.ThumbnailID
+		displayDecryptKey = msg.ThumbnailKey
+	}
+
+	if displayMediaID != "" && mediaLoader != nil {
 		mw := NewMediaWidget()
 		mw.SetLoading(true)
 		mr.bubble.Append(mw.Box)
 
-		mediaID := msg.MediaID
-		decryptKey := msg.MediaDecryptKey
+		mediaID := displayMediaID
+		decryptKey := displayDecryptKey
 		mimeType := msg.MediaMimeType
 		go func() {
 			data, err := mediaLoader(mediaID, decryptKey)
@@ -103,7 +110,7 @@ func NewMessageRow(msg *db.Message, consecutive bool, mediaLoader func(string, [
 				}
 			})
 		}()
-	} else if msg.MediaID != "" {
+	} else if displayMediaID != "" {
 		mediaLabel := gtk.NewLabel("[Media: " + msg.MediaMimeType + "]")
 		mediaLabel.AddCSSClass("media-placeholder")
 		mr.bubble.Append(mediaLabel)

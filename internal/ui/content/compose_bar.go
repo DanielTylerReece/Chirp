@@ -36,8 +36,10 @@ type ComposeBar struct {
 
 	// Main input row
 	textView   *gtk.TextView
+	scrolled   *gtk.ScrolledWindow
 	sendButton *gtk.Button
 	attachBtn  *gtk.Button
+	emojiBtn   *gtk.MenuButton // Emoji picker
 	simButton  *gtk.MenuButton // SIM selector dropdown
 
 	// Overlay previews (shown above compose row when active)
@@ -89,53 +91,88 @@ func NewComposeBar() *ComposeBar {
 	cb.attachmentPreview.SetVisible(false)
 	cb.outerBox.Append(cb.attachmentPreview)
 
-	// Input row (horizontal: attach + text + SIM + send)
-	cb.Box = gtk.NewBox(gtk.OrientationHorizontal, 8)
+	// Input row (horizontal: attach + text + right column)
+	cb.Box = gtk.NewBox(gtk.OrientationHorizontal, 4)
 	cb.Box.SetMarginStart(8)
 	cb.Box.SetMarginEnd(8)
-	cb.Box.SetMarginTop(8)
-	cb.Box.SetMarginBottom(8)
+	cb.Box.SetMarginTop(4)
+	cb.Box.SetMarginBottom(4)
 	cb.Box.AddCSSClass("compose-bar")
+
+	// Left column: emoji picker on top, attach button on bottom
+	leftCol := gtk.NewBox(gtk.OrientationVertical, 0)
+	leftCol.SetVAlign(gtk.AlignEnd)
+
+	// Emoji picker
+	emojiChooser := gtk.NewEmojiChooser()
+	emojiChooser.ConnectEmojiPicked(func(text string) {
+		cb.textView.Buffer().InsertAtCursor(text)
+	})
+	cb.emojiBtn = gtk.NewMenuButton()
+	cb.emojiBtn.SetIconName("face-smile-symbolic")
+	cb.emojiBtn.AddCSSClass("flat")
+	cb.emojiBtn.AddCSSClass("compose-icon-btn")
+	cb.emojiBtn.SetHasFrame(false)
+	cb.emojiBtn.SetPopover(emojiChooser)
+	leftCol.Append(cb.emojiBtn)
 
 	// Attachment button
 	cb.attachBtn = gtk.NewButtonFromIconName("mail-attachment-symbolic")
 	cb.attachBtn.AddCSSClass("flat")
+	cb.attachBtn.AddCSSClass("compose-icon-btn")
 	cb.attachBtn.ConnectClicked(func() {
 		cb.AttachFile()
 	})
-	cb.Box.Append(cb.attachBtn)
+	leftCol.Append(cb.attachBtn)
+
+	cb.Box.Append(leftCol)
 
 	// Text input
 	cb.textView = gtk.NewTextView()
 	cb.textView.SetWrapMode(gtk.WrapWordChar)
 	cb.textView.SetAcceptsTab(false)
-	cb.textView.AddCSSClass("compose-entry")
+	cb.textView.AddCSSClass("compose-text")
 	cb.textView.SetVExpand(false)
+	cb.textView.SetTopMargin(6)
+	cb.textView.SetBottomMargin(6)
+	cb.textView.SetLeftMargin(12)
+	cb.textView.SetRightMargin(12)
 
-	// Scrolled wrapper for text view (limits height)
 	scrolled := gtk.NewScrolledWindow()
 	scrolled.SetChild(cb.textView)
 	scrolled.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
-	scrolled.SetMaxContentHeight(120)
-	scrolled.SetPropagateNaturalHeight(true)
 	scrolled.SetHExpand(true)
+	scrolled.SetVExpand(false)
+	scrolled.AddCSSClass("compose-entry")
+	cb.scrolled = scrolled
+
+	// Dynamic height: grow as text wraps, cap at 5 rows
+	cb.textView.Buffer().ConnectChanged(func() {
+		cb.updateHeight()
+	})
+
 	cb.Box.Append(scrolled)
 
-	// SIM selector dropdown (hidden by default, shown when multiple SIMs available)
+	// Right column: SIM picker on top, send button on bottom
+	rightCol := gtk.NewBox(gtk.OrientationVertical, 0)
+	rightCol.SetVAlign(gtk.AlignEnd)
+
 	cb.simButton = gtk.NewMenuButton()
 	cb.simButton.SetLabel("📱")
-	cb.simButton.AddCSSClass("flat")
 	cb.simButton.AddCSSClass("sim-selector")
+	cb.simButton.SetHasFrame(false)
+	cb.simButton.SetAlwaysShowArrow(false)
 	cb.simButton.SetVisible(false)
 	cb.simButton.SetTooltipText("Select SIM card")
-	cb.Box.Append(cb.simButton)
+	rightCol.Append(cb.simButton)
 
-	// Send button
 	cb.sendButton = gtk.NewButtonFromIconName("go-up-symbolic")
 	cb.sendButton.AddCSSClass("compose-send-button")
 	cb.sendButton.AddCSSClass("suggested-action")
 	cb.sendButton.ConnectClicked(cb.doSend)
-	cb.Box.Append(cb.sendButton)
+	rightCol.Append(cb.sendButton)
+
+	cb.Box.Append(rightCol)
 
 	// Enter to send, Shift+Enter for newline
 	keyController := gtk.NewEventControllerKey()
@@ -190,6 +227,33 @@ func (cb *ComposeBar) doSend() {
 	buf.SetText("")
 	cb.ClearAttachment()
 	cb.ClearReply()
+}
+
+// updateHeight resizes the scrolled window to fit the text content,
+// starting at 1 row and growing up to 5 rows.
+func (cb *ComposeBar) updateHeight() {
+	const lineHeight = 20
+	const maxLines = 5
+	const oneRowHeight = lineHeight + 4 // padding
+
+	buf := cb.textView.Buffer()
+	iter := buf.StartIter()
+	lines := 1
+	for cb.textView.ForwardDisplayLine(iter) {
+		lines++
+		if lines >= maxLines {
+			break
+		}
+	}
+
+	height := lines*lineHeight + 4
+	if height < oneRowHeight {
+		height = oneRowHeight
+	}
+	if height > maxLines*lineHeight+4 {
+		height = maxLines*lineHeight + 4
+	}
+	cb.scrolled.SetSizeRequest(-1, height)
 }
 
 // AttachFile opens a file dialog and attaches the selected file.
