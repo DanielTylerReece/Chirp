@@ -124,7 +124,7 @@ data/                        Desktop entry, icon, systemd unit
 
 ## License
 
-AGPL-3.0-or-later (required by the libgm dependency)
+AGPL-3.0
 
 ## Acknowledgments
 
