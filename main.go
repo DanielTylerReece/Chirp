@@ -51,7 +51,7 @@ func main() {
 		appCtrl.Bus.SubscribeMessage(func(evt app.MessageEvent) {
 			activeConv := win.ActiveConversationID()
 			if activeConv != "" && activeConv == evt.ConversationID {
-				msgs, err := appCtrl.DB.GetMessages(activeConv, 50, 0)
+				msgs, err := appCtrl.DB.GetMessages(activeConv, 200, 0)
 				if err == nil {
 					glib.IdleAdd(func() {
 						if win.ActiveConversationID() == activeConv {
@@ -336,7 +336,7 @@ func main() {
 			}
 
 			// Show cached messages from DB instantly
-			cachedMsgs, _ := appCtrl.DB.GetMessages(convID, 50, 0)
+			cachedMsgs, _ := appCtrl.DB.GetMessages(convID, 200, 0)
 			if len(cachedMsgs) > 0 {
 				win.SetMessages(cachedMsgs)
 			}
@@ -346,7 +346,7 @@ func main() {
 				if appCtrl.Client == nil {
 					return
 				}
-				msgs, err := appCtrl.Client.FetchMessages(convID, 50)
+				msgs, err := appCtrl.Client.FetchMessages(convID, 200)
 				if err != nil {
 					log.Printf("fetch messages for %s: %v", convID, err)
 					return
@@ -374,7 +374,7 @@ func main() {
 				}
 				// Refresh from DB only if user is still on this conversation
 				if win.ActiveConversationID() == convID {
-					dbMsgs, err := appCtrl.DB.GetMessages(convID, 50, 0)
+					dbMsgs, err := appCtrl.DB.GetMessages(convID, 200, 0)
 					if err != nil {
 						return
 					}
@@ -444,7 +444,7 @@ func main() {
 				log.Printf("Message sent to %s", convID)
 				// Brief wait for server to process, then re-fetch from phone
 				time.Sleep(500 * time.Millisecond)
-				msgs, fetchErr := appCtrl.Client.FetchMessages(convID, 50)
+				msgs, fetchErr := appCtrl.Client.FetchMessages(convID, 200)
 				if fetchErr == nil {
 					for _, m := range msgs {
 						dbMsg := &db.Message{
@@ -469,7 +469,7 @@ func main() {
 				} else {
 					log.Printf("re-fetch messages after send: %v", fetchErr)
 				}
-				dbMsgs, err := appCtrl.DB.GetMessages(convID, 50, 0)
+				dbMsgs, err := appCtrl.DB.GetMessages(convID, 200, 0)
 				if err == nil {
 					glib.IdleAdd(func() {
 						win.SetMessages(dbMsgs)
