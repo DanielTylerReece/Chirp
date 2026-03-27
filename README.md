@@ -41,35 +41,38 @@
 | Go | 1.22+ (build only) |
 | Android phone | Google Messages app |
 
+## Build & Install
+
 ### Fedora / RHEL
 
 ```bash
-sudo dnf install gtk4-devel libadwaita-devel gcc
+sudo dnf install gtk4-devel libadwaita-devel gcc golang
+git clone https://github.com/DanielTylerReece/Chirp.git
+cd Chirp
+make install
 ```
 
 ### Arch / CachyOS
 
 ```bash
-sudo pacman -S gtk4 libadwaita go
+sudo pacman -S gtk4 libadwaita go gcc
+git clone https://github.com/DanielTylerReece/Chirp.git
+cd Chirp
+make install
 ```
 
 ### Ubuntu / Debian
 
 ```bash
 sudo apt install libgtk-4-dev libadwaita-1-dev gcc golang-go
-```
-
-## Build & Install
-
-```bash
 git clone https://github.com/DanielTylerReece/Chirp.git
 cd Chirp
 make install
 ```
 
-This installs the binary to `~/.local/bin/`, the desktop entry, icon, and GSettings schema to the appropriate XDG directories.
+`make install` builds the binary and installs it to `~/.local/bin/`, along with the desktop entry, icon, and GSettings schema to the appropriate XDG directories.
 
-Or just build without installing:
+To build without installing:
 
 ```bash
 make build
