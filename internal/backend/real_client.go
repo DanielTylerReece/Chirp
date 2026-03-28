@@ -41,6 +41,24 @@ func NewRealClient(authData *libgm.AuthData, logger zerolog.Logger) *RealClient 
 	return rc
 }
 
+// NewRealClientWithCookies creates a RealClient with Google cookies set for Gaia pairing.
+func NewRealClientWithCookies(cookies map[string]string, logger zerolog.Logger) *RealClient {
+	authData := libgm.NewAuthData()
+	authData.Cookies = cookies
+	rc := &RealClient{
+		authData: authData,
+		logger:   logger,
+	}
+	rc.client = libgm.NewClient(authData, nil, logger)
+	rc.client.SetEventHandler(rc.handleEvent)
+	return rc
+}
+
+// FetchConfig validates cookies by fetching Google config.
+func (rc *RealClient) FetchConfig(ctx context.Context) error {
+	return rc.client.FetchConfig(ctx)
+}
+
 func (rc *RealClient) handleEvent(evt any) {
 	// Intercept Settings events to store SIM card info
 	if settings, ok := evt.(*gmproto.Settings); ok {

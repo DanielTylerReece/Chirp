@@ -23,7 +23,7 @@ type MessageRow struct {
 }
 
 // NewMessageRow creates a chat bubble for a message.
-func NewMessageRow(msg *db.Message, consecutive bool, mediaLoader func(string, []byte) ([]byte, error)) *MessageRow {
+func NewMessageRow(msg *db.Message, consecutive bool, mediaLoader func(string, []byte) (string, error)) *MessageRow {
 	mr := &MessageRow{
 		participantID: msg.ParticipantID,
 		timestampMS:   msg.TimestampMS,
@@ -88,22 +88,22 @@ func NewMessageRow(msg *db.Message, consecutive bool, mediaLoader func(string, [
 		decryptKey := displayDecryptKey
 		mimeType := msg.MediaMimeType
 		go func() {
-			data, err := mediaLoader(mediaID, decryptKey)
+			path, err := mediaLoader(mediaID, decryptKey)
 			if err != nil {
 				log.Printf("load media %s: %v", mediaID, err)
 				return
 			}
 			glib.IdleAdd(func() {
-				mw.LoadFromBytes(data, mimeType)
+				mw.LoadFromFile(path)
 				mw.SetLoading(false)
 
 				// Make image clickable — opens fullscreen viewer with save option
 				if isImageMime(mimeType) {
 					gesture := gtk.NewGestureClick()
-					imageData := data // capture for closure
-					imageMime := mimeType
+					imgPath := path // capture path only, not bytes
+					imgMime := mimeType
 					gesture.ConnectReleased(func(nPress int, x, y float64) {
-						showImageViewer(mr.row, imageData, imageMime)
+						showImageViewer(mr.row, imgPath, imgMime)
 					})
 					mw.picture.AddController(gesture)
 					mw.picture.SetCursorFromName("pointer")

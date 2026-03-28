@@ -122,6 +122,7 @@ func (cm *ContactManager) FetchAndCacheAvatars(participantIDs []string) error {
 				log.Printf("contacts: update participant avatar %s: %v", id, err)
 				continue
 			}
+			thumbs[id] = nil // release bytes after writing to disk
 			cached++
 		}
 	}

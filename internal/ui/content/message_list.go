@@ -11,10 +11,11 @@ import (
 type MessageList struct {
 	*gtk.Box
 
-	scrolled    *gtk.ScrolledWindow
-	listBox     *gtk.ListBox
-	rows        []*MessageRow
-	mediaLoader func(mediaID string, decryptKey []byte) ([]byte, error)
+	scrolled       *gtk.ScrolledWindow
+	listBox        *gtk.ListBox
+	rows           []*MessageRow
+	mediaLoader    func(mediaID string, decryptKey []byte) (string, error)
+	lastFingerprint string // tracks message IDs+statuses to skip redundant rebuilds
 }
 
 // NewMessageList creates an empty scrollable message list.
@@ -38,8 +39,26 @@ func NewMessageList() *MessageList {
 	return ml
 }
 
-// SetMessages replaces all messages in the list.
+// msgFingerprint builds a fast identity string from message IDs and statuses.
+func msgFingerprint(msgs []db.Message) string {
+	// Preallocate: ~20 chars per message (ID hash + status digit + separator)
+	buf := make([]byte, 0, len(msgs)*20)
+	for i := range msgs {
+		buf = append(buf, msgs[i].ID...)
+		buf = append(buf, byte('0'+msgs[i].Status))
+		buf = append(buf, ',')
+	}
+	return string(buf)
+}
+
+// SetMessages replaces all messages in the list, skipping if nothing changed.
 func (ml *MessageList) SetMessages(msgs []db.Message) {
+	fp := msgFingerprint(msgs)
+	if fp == ml.lastFingerprint {
+		return // nothing changed
+	}
+	ml.lastFingerprint = fp
+
 	// Clear existing rows and date separators
 	ml.listBox.RemoveAll()
 	ml.rows = nil

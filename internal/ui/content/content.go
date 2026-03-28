@@ -28,7 +28,7 @@ type Content struct {
 
 	// Callbacks
 	onSend      func(convID string, req SendRequest)
-	mediaLoader func(mediaID string, decryptKey []byte) ([]byte, error) // downloads media
+	mediaLoader func(mediaID string, decryptKey []byte) (string, error) // returns cached file path
 }
 
 // NewContent creates the content area with header, message list, and compose bar.
@@ -98,7 +98,7 @@ func (c *Content) SetSIMs(sims []SIMOption, defaultSIMNumber int32) {
 }
 
 // SetMediaLoader sets the function used to download media for display.
-func (c *Content) SetMediaLoader(fn func(mediaID string, decryptKey []byte) ([]byte, error)) {
+func (c *Content) SetMediaLoader(fn func(mediaID string, decryptKey []byte) (string, error)) {
 	c.mediaLoader = fn
 	c.messageList.mediaLoader = fn
 }

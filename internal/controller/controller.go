@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/tyler/gmessage/internal/app"
@@ -122,15 +124,25 @@ func (a *App) StartGoogleLogin(cookies map[string]string) (emojiChan chan string
 	emojiChan = make(chan string, 1)
 	errChan = make(chan error, 1)
 
+	// Disconnect any existing client (e.g., from QR flow)
+	if a.Client != nil {
+		a.Client.Disconnect()
+	}
+
 	logger := zerolog.New(log.Writer()).With().Timestamp().Logger()
-	realClient := backend.NewRealClient(nil, logger)
+	realClient := backend.NewRealClientWithCookies(cookies, logger)
 	a.Client = realClient
 	a.setupRouter()
 
 	realClient.SetEventHandler(a.Router.Handle)
-	realClient.SetCookies(cookies)
 
 	go func() {
+		log.Println("controller: fetching Google config...")
+		if err := realClient.FetchConfig(context.Background()); err != nil {
+			log.Printf("controller: FetchConfig error: %v", err)
+			errChan <- fmt.Errorf("cookies expired or invalid. Make sure you:\n1. Open messages.google.com in your browser\n2. Sign in to your Google account\n3. Re-copy the cookies (they refresh on each visit)")
+			return
+		}
 		log.Println("controller: starting Google Account pairing...")
 		err := realClient.DoGaiaPairing(context.Background(), func(emoji string) {
 			log.Printf("controller: emoji for verification: %s", emoji)
@@ -138,6 +150,11 @@ func (a *App) StartGoogleLogin(cookies map[string]string) (emojiChan chan string
 		})
 		if err != nil {
 			log.Printf("controller: Gaia pairing error: %v", err)
+			// Provide a friendlier error message for auth failures
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "invalid authentication") {
+				err = fmt.Errorf("cookies expired or invalid. Make sure you:\n1. Open messages.google.com in your browser\n2. Sign in to your Google account\n3. Re-copy the cookies (they refresh on each visit)")
+			}
 			errChan <- err
 			return
 		}

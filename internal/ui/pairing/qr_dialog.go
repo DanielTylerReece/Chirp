@@ -3,6 +3,7 @@ package pairing
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -23,11 +24,12 @@ type QRDialog struct {
 	onCancel    func()
 
 	// Google page
-	cookieText    *gtk.TextView
-	googleStatus  *gtk.Label
-	emojiLabel    *gtk.Label
-	signInBtn     *gtk.Button
-	onGoogleLogin func(cookies map[string]string)
+	cookieText       *gtk.TextView
+	googleStatus     *gtk.Label
+	emojiLabel       *gtk.Label
+	signInBtn        *gtk.Button
+	onGoogleLogin    func(cookies map[string]string)
+	onFirefoxImport  func() (map[string]string, error)
 }
 
 // NewQRDialog creates a pairing dialog with QR and Google Account tabs.
@@ -86,23 +88,87 @@ func NewQRDialog() *QRDialog {
 	openBtn := gtk.NewButtonWithLabel("Open Google Messages")
 	openBtn.AddCSSClass("suggested-action")
 	openBtn.AddCSSClass("pill")
-	openBtn.SetHAlign(gtk.AlignStart)
+	openBtn.SetHAlign(gtk.AlignCenter)
 	openBtn.ConnectClicked(func() {
 		gtk.ShowURI(nil, "https://messages.google.com", 0)
 	})
 	googleBox.Append(openBtn)
 
-	step2 := gtk.NewLabel("2. Open browser DevTools (F12) > Application > Cookies")
-	step2.SetXAlign(0)
-	step2.SetWrap(true)
-	googleBox.Append(step2)
+	// Browser-specific instructions with toggle
+	chromeSteps := "2. Open DevTools (F12) > Application > Cookies > messages.google.com\n3. Copy the cookie values and paste below"
+	firefoxSteps := "2. Open DevTools (F12) > Storage > Cookies > messages.google.com\n3. Copy the cookie values and paste below"
 
-	step3 := gtk.NewLabel("3. Copy all cookies and paste below (JSON or key=value format)")
-	step3.SetXAlign(0)
-	step3.SetWrap(true)
-	googleBox.Append(step3)
+	stepsLabel := gtk.NewLabel(chromeSteps)
+	stepsLabel.SetXAlign(0)
+	stepsLabel.SetWrap(true)
 
-	// Cookie text area
+	browserToggle := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	browserToggle.SetHAlign(gtk.AlignCenter)
+	browserToggle.SetMarginTop(4)
+	browserToggle.AddCSSClass("linked")
+
+	chromeBtn := gtk.NewToggleButton()
+	chromeBtn.SetLabel("Chrome")
+	chromeBtn.SetActive(true)
+
+	firefoxBtn := gtk.NewToggleButton()
+	firefoxBtn.SetLabel("Firefox")
+	firefoxBtn.SetGroup(chromeBtn)
+
+	browserToggle.Append(chromeBtn)
+	browserToggle.Append(firefoxBtn)
+	googleBox.Append(browserToggle)
+	googleBox.Append(stepsLabel)
+
+	// Firefox/Zen auto-import button (only visible when Firefox selected)
+	firefoxImportBtn := gtk.NewButtonWithLabel("Import from Firefox / Zen")
+	firefoxImportBtn.AddCSSClass("pill")
+	firefoxImportBtn.SetHAlign(gtk.AlignCenter)
+	firefoxImportBtn.SetMarginTop(4)
+	firefoxImportBtn.SetVisible(false)
+	firefoxImportBtn.ConnectClicked(func() {
+		if qd.onFirefoxImport != nil {
+			cookies, err := qd.onFirefoxImport()
+			if err != nil {
+				qd.ShowError(err.Error())
+				return
+			}
+			// Populate the text area with the imported cookies
+			var lines []string
+			for k, v := range cookies {
+				lines = append(lines, k+":\""+v+"\"")
+			}
+			qd.cookieText.Buffer().SetText(strings.Join(lines, "\n"))
+			qd.googleStatus.SetText("Cookies imported successfully")
+			qd.googleStatus.RemoveCSSClass("error")
+			qd.googleStatus.SetVisible(true)
+		}
+	})
+	googleBox.Append(firefoxImportBtn)
+
+	orLabel := gtk.NewLabel("— or paste cookies manually —")
+	orLabel.SetOpacity(0.5)
+	orLabel.SetMarginTop(8)
+	orLabel.SetVisible(false)
+	googleBox.Append(orLabel)
+
+	// Show/hide import button based on browser toggle
+	chromeBtn.ConnectToggled(func() {
+		if chromeBtn.Active() {
+			stepsLabel.SetText(chromeSteps)
+			firefoxImportBtn.SetVisible(false)
+			orLabel.SetVisible(false)
+		}
+	})
+	firefoxBtn.ConnectToggled(func() {
+		if firefoxBtn.Active() {
+			stepsLabel.SetText(firefoxSteps)
+			firefoxImportBtn.SetVisible(true)
+			orLabel.SetVisible(true)
+		}
+	})
+
+	// Cookie text area (fallback)
 	qd.cookieText = gtk.NewTextView()
 	qd.cookieText.SetWrapMode(gtk.WrapWordChar)
 	qd.cookieText.SetTopMargin(8)
@@ -119,7 +185,7 @@ func NewQRDialog() *QRDialog {
 	cookieScroll.AddCSSClass("card")
 	googleBox.Append(cookieScroll)
 
-	requiredLabel := gtk.NewLabel("Required: SID, HSID, SSID, APISID, SAPISID, OSID")
+	requiredLabel := gtk.NewLabel("Paste all cookies from .google.com and messages.google.com")
 	requiredLabel.SetXAlign(0)
 	requiredLabel.SetOpacity(0.5)
 	requiredLabel.AddCSSClass("caption")
@@ -257,6 +323,11 @@ func (qd *QRDialog) SetOnCancel(fn func()) {
 // SetOnGoogleLogin sets the callback for Google Account sign-in.
 func (qd *QRDialog) SetOnGoogleLogin(fn func(cookies map[string]string)) {
 	qd.onGoogleLogin = fn
+}
+
+// SetOnFirefoxImport sets the callback for importing cookies from Firefox.
+func (qd *QRDialog) SetOnFirefoxImport(fn func() (map[string]string, error)) {
+	qd.onFirefoxImport = fn
 }
 
 // Close dismisses the dialog.

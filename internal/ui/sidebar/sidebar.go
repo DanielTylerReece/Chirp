@@ -85,17 +85,38 @@ func (s *Sidebar) SetOnNewConversation(fn func()) {
 
 // UpdateConversations replaces the conversation list.
 func (s *Sidebar) UpdateConversations(convs []db.Conversation) {
-	// Clear existing
+	// Build set of incoming conversation IDs
+	incoming := make(map[string]bool, len(convs))
+	for i := range convs {
+		incoming[convs[i].ID] = true
+	}
+
+	// Remove rows that no longer exist
+	for id, cr := range s.rows {
+		if !incoming[id] {
+			s.listBox.Remove(cr.row)
+			delete(s.rows, id)
+		}
+	}
+
+	// Update existing or create new rows
+	for i := range convs {
+		if cr, ok := s.rows[convs[i].ID]; ok {
+			cr.Update(&convs[i])
+		} else {
+			cr := NewConversationRow(&convs[i])
+			s.rows[convs[i].ID] = cr
+		}
+	}
+
+	// Reorder: detach all and re-append in correct order
 	for _, cr := range s.rows {
 		s.listBox.Remove(cr.row)
 	}
-	s.rows = make(map[string]*ConversationRow)
-
-	// Add new rows
 	for i := range convs {
-		cr := NewConversationRow(&convs[i])
-		s.listBox.Append(cr.row)
-		s.rows[convs[i].ID] = cr
+		if cr, ok := s.rows[convs[i].ID]; ok {
+			s.listBox.Append(cr.row)
+		}
 	}
 }
 

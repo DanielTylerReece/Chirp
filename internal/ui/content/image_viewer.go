@@ -2,19 +2,19 @@ package content
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
-	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
-// showImageViewer opens a fullscreen-style dialog displaying the image at
-// full resolution, with a Save button to write it to disk.
-func showImageViewer(parent gtk.Widgetter, imageData []byte, mimeType string) {
+// showImageViewer opens a fullscreen-style dialog displaying the image from
+// a file path, with a Save button to copy it to disk.
+func showImageViewer(parent gtk.Widgetter, imagePath string, mimeType string) {
 	dialog := adw.NewDialog()
 	dialog.SetTitle("Image")
 	dialog.SetContentWidth(800)
@@ -22,17 +22,16 @@ func showImageViewer(parent gtk.Widgetter, imageData []byte, mimeType string) {
 
 	content := gtk.NewBox(gtk.OrientationVertical, 8)
 
-	// Large picture
+	// Large picture — loaded from file, no bytes held in Go heap
 	picture := gtk.NewPicture()
 	picture.SetCanShrink(true)
 	picture.SetContentFit(gtk.ContentFitContain)
 	picture.SetVExpand(true)
 	picture.SetHExpand(true)
 
-	gBytes := glib.NewBytesWithGo(imageData)
-	texture, err := gdk.NewTextureFromBytes(gBytes)
+	texture, err := gdk.NewTextureFromFilename(imagePath)
 	if err != nil {
-		log.Printf("image_viewer: load texture: %v", err)
+		log.Printf("image_viewer: load texture from %s: %v", imagePath, err)
 		errLabel := gtk.NewLabel("Failed to load image")
 		content.Append(errLabel)
 	} else {
@@ -40,7 +39,7 @@ func showImageViewer(parent gtk.Widgetter, imageData []byte, mimeType string) {
 	}
 	content.Append(picture)
 
-	// Save button
+	// Save button — copies file instead of writing bytes
 	saveBtn := gtk.NewButtonWithLabel("Save Image")
 	saveBtn.AddCSSClass("suggested-action")
 	saveBtn.AddCSSClass("pill")
@@ -64,19 +63,17 @@ func showImageViewer(parent gtk.Widgetter, imageData []byte, mimeType string) {
 		}
 		fileDialog.SetInitialName("image" + ext)
 
-		// Parent window is optional — nil works (same pattern as compose_bar.go)
 		fileDialog.Save(context.Background(), nil, func(res gio.AsyncResulter) {
 			file, err := fileDialog.SaveFinish(res)
 			if err != nil {
-				// User cancelled or error
 				return
 			}
-			path := file.Path()
-			if path == "" {
+			destPath := file.Path()
+			if destPath == "" {
 				return
 			}
-			if err := os.WriteFile(path, imageData, 0644); err != nil {
-				log.Printf("image_viewer: save file %s: %v", path, err)
+			if err := copyFile(imagePath, destPath); err != nil {
+				log.Printf("image_viewer: save file %s: %v", destPath, err)
 			}
 		})
 	})
@@ -88,4 +85,19 @@ func showImageViewer(parent gtk.Widgetter, imageData []byte, mimeType string) {
 	dialog.SetChild(toolbar)
 
 	dialog.Present(parent)
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }

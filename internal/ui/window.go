@@ -20,6 +20,7 @@ type Window struct {
 	sidebar   *sidebar.Sidebar
 	content   *content.Content
 	config    *app.Config
+	stack     *gtk.Stack
 
 	// Callbacks for shortcut-triggered actions
 	onShowPreferences func()
@@ -73,10 +74,37 @@ func NewWindow(application *gtk.Application, cfg *app.Config) *Window {
 	splitView.SetSidebar(sidebarPage)
 	splitView.SetContent(contentPage)
 
-	win.SetContent(splitView)
+	// --- Loading screen ---
+	loadingBox := gtk.NewBox(gtk.OrientationVertical, 16)
+	loadingBox.SetHAlign(gtk.AlignCenter)
+	loadingBox.SetVAlign(gtk.AlignCenter)
+
+	loadingSpinner := gtk.NewSpinner()
+	loadingSpinner.SetSizeRequest(48, 48)
+	loadingSpinner.Start()
+	loadingBox.Append(loadingSpinner)
+
+	loadingLabel := gtk.NewLabel("Loading messages...")
+	loadingLabel.AddCSSClass("title-2")
+	loadingBox.Append(loadingLabel)
+
+	loadingSub := gtk.NewLabel("Syncing with your phone")
+	loadingSub.SetOpacity(0.6)
+	loadingBox.Append(loadingSub)
+
+	// --- Stack: loading vs main ---
+	stack := gtk.NewStack()
+	stack.SetTransitionType(gtk.StackTransitionTypeCrossfade)
+	stack.SetTransitionDuration(300)
+	stack.AddNamed(loadingBox, "loading")
+	stack.AddNamed(splitView, "main")
+	stack.SetVisibleChildName("main")
+
+	win.SetContent(stack)
 
 	w := &Window{
 		win:       win,
+		stack:     stack,
 		splitView: splitView,
 		sidebar:   sb,
 		content:   ct,
@@ -165,6 +193,16 @@ func (w *Window) setupWindowStatePersistence() {
 	})
 }
 
+// ShowLoading switches to the loading screen.
+func (w *Window) ShowLoading() {
+	w.stack.SetVisibleChildName("loading")
+}
+
+// HideLoading switches back to the main split view.
+func (w *Window) HideLoading() {
+	w.stack.SetVisibleChildName("main")
+}
+
 // ShowPreferences opens the preferences dialog.
 func (w *Window) ShowPreferences() {
 	if w.onShowPreferences != nil {
@@ -229,7 +267,7 @@ func (w *Window) SetConversation(conv *db.Conversation) {
 }
 
 // SetMediaLoader sets the function used to download media for display.
-func (w *Window) SetMediaLoader(fn func(mediaID string, decryptKey []byte) ([]byte, error)) {
+func (w *Window) SetMediaLoader(fn func(mediaID string, decryptKey []byte) (string, error)) {
 	w.content.SetMediaLoader(fn)
 }
 

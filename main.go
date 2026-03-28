@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
@@ -47,11 +48,14 @@ func main() {
 		// Start event bus
 		go appCtrl.Bus.Start()
 
-		// Subscribe to real-time message events — refresh active conversation + sidebar
-		appCtrl.Bus.SubscribeMessage(func(evt app.MessageEvent) {
+		// Debounced refresh — coalesces rapid events into single UI updates
+		var refreshMu sync.Mutex
+		var refreshTimer *time.Timer
+
+		doRefresh := func() {
 			activeConv := win.ActiveConversationID()
-			if activeConv != "" && activeConv == evt.ConversationID {
-				msgs, err := appCtrl.DB.GetMessages(activeConv, 400, 0)
+			if activeConv != "" {
+				msgs, err := appCtrl.DB.GetMessages(activeConv, 800, 0)
 				if err == nil {
 					glib.IdleAdd(func() {
 						if win.ActiveConversationID() == activeConv {
@@ -60,22 +64,38 @@ func main() {
 					})
 				}
 			}
-			// Refresh sidebar to update last message preview
 			convs, err := appCtrl.DB.ListConversations(100, 0)
 			if err == nil {
 				glib.IdleAdd(func() {
 					win.UpdateConversations(convs)
 				})
 			}
+		}
+
+		scheduleRefresh := func() {
+			refreshMu.Lock()
+			defer refreshMu.Unlock()
+			if refreshTimer != nil {
+				refreshTimer.Stop()
+			}
+			refreshTimer = time.AfterFunc(200*time.Millisecond, doRefresh)
+		}
+
+		appCtrl.Bus.SubscribeMessage(func(evt app.MessageEvent) {
+			scheduleRefresh()
 		})
 
-		// Wire logout
+		// Wire logout — clears session and all cached data
 		win.SetOnLogout(func() {
-			log.Println("Logging out — clearing session")
+			log.Println("Logging out — clearing all data")
 			if appCtrl.Client != nil {
 				appCtrl.Client.Disconnect()
 			}
 			appCtrl.Session.Clear()
+			// Remove database and cached media
+			os.Remove(cfg.DBPath)
+			os.RemoveAll(cfg.MediaDir)
+			os.RemoveAll(cfg.AvatarDir)
 			application.Quit()
 		})
 
@@ -200,6 +220,7 @@ func main() {
 
 		// Load cached conversations immediately on startup (before connection)
 		cachedConvs, _ := appCtrl.DB.ListConversations(100, 0)
+		firstLogin := len(cachedConvs) == 0
 		if len(cachedConvs) > 0 {
 			log.Printf("Loaded %d cached conversations from DB", len(cachedConvs))
 			win.UpdateConversations(cachedConvs)
@@ -208,6 +229,9 @@ func main() {
 		appCtrl.OnConnected = func() {
 			glib.IdleAdd(func() {
 				log.Println("Connected! Syncing in background...")
+				if firstLogin {
+					win.ShowLoading()
+				}
 				if appCtrl.Sync != nil {
 					go func() {
 						if err := appCtrl.Sync.ShallowBackfill(); err != nil {
@@ -238,6 +262,13 @@ func main() {
 									win.UpdateConversations(convs)
 								})
 							}
+						}
+
+						// Hide loading screen after sync completes
+						if firstLogin {
+							glib.IdleAdd(func() {
+								win.HideLoading()
+							})
 						}
 
 						// Fetch participant avatars in background
@@ -286,17 +317,9 @@ func main() {
 			})
 		}
 
-		// Subscribe to conversation events from the bus to refresh sidebar
+		// Subscribe to conversation events — uses same debounced refresh
 		appCtrl.Bus.SubscribeConversation(func(evt app.ConversationEvent) {
-			// Reload conversation list from DB on any conversation event
-			convs, err := appCtrl.DB.ListConversations(100, 0)
-			if err != nil {
-				log.Printf("refresh conversations: %v", err)
-				return
-			}
-			glib.IdleAdd(func() {
-				win.UpdateConversations(convs)
-			})
+			scheduleRefresh()
 		})
 
 		// Wire conversation selection → load messages
@@ -343,7 +366,7 @@ func main() {
 			}
 
 			// Show cached messages from DB instantly
-			cachedMsgs, _ := appCtrl.DB.GetMessages(convID, 400, 0)
+			cachedMsgs, _ := appCtrl.DB.GetMessages(convID, 800, 0)
 			if len(cachedMsgs) > 0 {
 				win.SetMessages(cachedMsgs)
 			}
@@ -353,7 +376,7 @@ func main() {
 				if appCtrl.Client == nil {
 					return
 				}
-				msgs, err := appCtrl.Client.FetchMessages(convID, 400)
+				msgs, err := appCtrl.Client.FetchMessages(convID, 800)
 				if err != nil {
 					log.Printf("fetch messages for %s: %v", convID, err)
 					return
@@ -381,7 +404,7 @@ func main() {
 				}
 				// Refresh from DB only if user is still on this conversation
 				if win.ActiveConversationID() == convID {
-					dbMsgs, err := appCtrl.DB.GetMessages(convID, 400, 0)
+					dbMsgs, err := appCtrl.DB.GetMessages(convID, 800, 0)
 					if err != nil {
 						return
 					}
@@ -394,41 +417,40 @@ func main() {
 			}()
 		})
 
-		// Wire media loader for inline image display (cache-first)
-		win.SetMediaLoader(func(mediaID string, decryptKey []byte) ([]byte, error) {
+		// Wire media loader — returns file path (cache-first, no in-memory bytes)
+		win.SetMediaLoader(func(mediaID string, decryptKey []byte) (string, error) {
 			// Check local disk cache first
 			entry, _ := appCtrl.DB.GetMediaCache(mediaID)
 			if entry != nil {
-				data, err := os.ReadFile(entry.LocalPath)
-				if err == nil {
-					return data, nil
+				if _, err := os.Stat(entry.LocalPath); err == nil {
+					return entry.LocalPath, nil
 				}
 				// File missing on disk — remove stale DB entry and re-download
 				appCtrl.DB.DeleteMediaCache(mediaID)
 			}
 
 			if appCtrl.Client == nil {
-				return nil, fmt.Errorf("not connected")
+				return "", fmt.Errorf("not connected")
 			}
 			data, err := appCtrl.Client.DownloadMedia(mediaID, decryptKey)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 
-			// Save to disk cache
-			ext := ".bin"
-			cachePath := filepath.Join(cfg.MediaDir, mediaID+ext)
-			if writeErr := os.WriteFile(cachePath, data, 0600); writeErr == nil {
-				appCtrl.DB.AddMediaCache(&db.MediaCacheEntry{
-					MediaID:   mediaID,
-					LocalPath: cachePath,
-					MimeType:  "",
-					CachedAt:  time.Now().Unix(),
-					SizeBytes: int64(len(data)),
-				})
+			// Save to disk cache and return path
+			cachePath := filepath.Join(cfg.MediaDir, mediaID+".bin")
+			if writeErr := os.WriteFile(cachePath, data, 0600); writeErr != nil {
+				return "", writeErr
 			}
+			appCtrl.DB.AddMediaCache(&db.MediaCacheEntry{
+				MediaID:   mediaID,
+				LocalPath: cachePath,
+				MimeType:  "",
+				CachedAt:  time.Now().Unix(),
+				SizeBytes: int64(len(data)),
+			})
 
-			return data, nil
+			return cachePath, nil
 		})
 
 		// Wire send button
@@ -453,7 +475,7 @@ func main() {
 				Status:         0, // hourglass
 			}
 			appCtrl.DB.UpsertMessage(placeholder)
-			msgs, _ := appCtrl.DB.GetMessages(convID, 400, 0)
+			msgs, _ := appCtrl.DB.GetMessages(convID, 800, 0)
 			glib.IdleAdd(func() {
 				win.SetMessages(msgs)
 			})
@@ -469,7 +491,7 @@ func main() {
 					log.Printf("send message: %v", err)
 					// Mark placeholder as failed
 					appCtrl.DB.UpdateMessageStatus(tmpID, 4)
-					dbMsgs, _ := appCtrl.DB.GetMessages(convID, 400, 0)
+					dbMsgs, _ := appCtrl.DB.GetMessages(convID, 800, 0)
 					glib.IdleAdd(func() { win.SetMessages(dbMsgs) })
 					return
 				}
@@ -479,7 +501,7 @@ func main() {
 				appCtrl.DB.DeleteMessage(tmpID)
 				// Brief wait for server to process, then re-fetch from phone
 				time.Sleep(500 * time.Millisecond)
-				msgs, fetchErr := appCtrl.Client.FetchMessages(convID, 400)
+				msgs, fetchErr := appCtrl.Client.FetchMessages(convID, 800)
 				if fetchErr == nil {
 					for _, m := range msgs {
 						dbMsg := &db.Message{
@@ -504,7 +526,7 @@ func main() {
 				} else {
 					log.Printf("re-fetch messages after send: %v", fetchErr)
 				}
-				dbMsgs, err := appCtrl.DB.GetMessages(convID, 400, 0)
+				dbMsgs, err := appCtrl.DB.GetMessages(convID, 800, 0)
 				if err == nil {
 					glib.IdleAdd(func() {
 						win.SetMessages(dbMsgs)
@@ -524,24 +546,29 @@ func main() {
 func showPairingDialog(win *ui.Window, appCtrl *controller.App) *pairing.QRDialog {
 	qrDialog := pairing.NewQRDialog()
 
-	// QR code pairing (existing flow)
-	go func() {
-		url, err := appCtrl.StartPairing()
-		if err != nil {
-			log.Printf("pairing: %v", err)
+	// Start QR pairing — called when dialog opens or user switches to QR tab
+	startQR := func() {
+		go func() {
+			url, err := appCtrl.StartPairing()
+			if err != nil {
+				log.Printf("pairing: %v", err)
+				glib.IdleAdd(func() {
+					qrDialog.SetStatus("Pairing failed: " + err.Error())
+				})
+				return
+			}
+
 			glib.IdleAdd(func() {
-				qrDialog.SetStatus("Pairing failed: " + err.Error())
+				qrDialog.SetQRCode(url)
+				qrDialog.SetStatus("Scan this QR code with Google Messages on your phone\n\nGoogle Messages \u2192 Settings \u2192 Device pairing \u2192 QR code scanner")
 			})
-			return
-		}
+		}()
+	}
 
-		glib.IdleAdd(func() {
-			qrDialog.SetQRCode(url)
-			qrDialog.SetStatus("Scan this QR code with Google Messages on your phone\n\nGoogle Messages \u2192 Settings \u2192 Device pairing \u2192 QR code scanner")
-		})
-	}()
+	// Start QR flow by default
+	startQR()
 
-	// Google Account pairing
+	// Google Account pairing — restarts QR if it fails so user can switch back
 	qrDialog.SetOnGoogleLogin(func(cookies map[string]string) {
 		emojiChan, errChan := appCtrl.StartGoogleLogin(cookies)
 		go func() {
@@ -562,6 +589,11 @@ func showPairingDialog(win *ui.Window, appCtrl *controller.App) *pairing.QRDialo
 				})
 			}
 		}()
+	})
+
+	// Firefox cookie import
+	qrDialog.SetOnFirefoxImport(func() (map[string]string, error) {
+		return backend.ReadFirefoxCookies()
 	})
 
 	qrDialog.Show(win.ApplicationWindow())

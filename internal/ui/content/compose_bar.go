@@ -40,7 +40,8 @@ type ComposeBar struct {
 	sendButton *gtk.Button
 	attachBtn  *gtk.Button
 	emojiBtn   *gtk.MenuButton // Emoji picker
-	simButton  *gtk.MenuButton // SIM selector dropdown
+	simButton  *gtk.Button     // SIM selector
+	simPopover *gtk.Popover    // SIM dropdown
 
 	// Overlay previews (shown above compose row when active)
 	outerBox          *gtk.Box // vertical: previews + input row
@@ -157,13 +158,17 @@ func NewComposeBar() *ComposeBar {
 	rightCol := gtk.NewBox(gtk.OrientationVertical, 0)
 	rightCol.SetVAlign(gtk.AlignEnd)
 
-	cb.simButton = gtk.NewMenuButton()
-	cb.simButton.SetLabel("📱")
+	cb.simPopover = gtk.NewPopover()
+	cb.simButton = gtk.NewButtonWithLabel("📱")
+	cb.simButton.AddCSSClass("flat")
 	cb.simButton.AddCSSClass("sim-selector")
-	cb.simButton.SetHasFrame(false)
-	cb.simButton.SetAlwaysShowArrow(false)
 	cb.simButton.SetVisible(false)
 	cb.simButton.SetTooltipText("Select SIM card")
+	cb.simButton.SetMarginBottom(8)
+	cb.simButton.ConnectClicked(func() {
+		cb.simPopover.Popup()
+	})
+	cb.simPopover.SetParent(cb.simButton)
 	rightCol.Append(cb.simButton)
 
 	cb.sendButton = gtk.NewButtonFromIconName("go-up-symbolic")
@@ -430,12 +435,10 @@ func (cb *ComposeBar) SetSIMs(sims []SIMOption, defaultSIMNumber int32) {
 	listBox.ConnectRowActivated(func(row *gtk.ListBoxRow) {
 		cb.selectedSIM = row.Index()
 		cb.updateSIMTooltip()
-		cb.simButton.Popdown()
+		cb.simPopover.Popdown()
 	})
 
-	popover := gtk.NewPopover()
-	popover.SetChild(listBox)
-	cb.simButton.SetPopover(popover)
+	cb.simPopover.SetChild(listBox)
 
 	cb.updateSIMTooltip()
 	cb.simButton.SetVisible(true)
