@@ -524,6 +524,7 @@ func main() {
 func showPairingDialog(win *ui.Window, appCtrl *controller.App) *pairing.QRDialog {
 	qrDialog := pairing.NewQRDialog()
 
+	// QR code pairing (existing flow)
 	go func() {
 		url, err := appCtrl.StartPairing()
 		if err != nil {
@@ -539,6 +540,29 @@ func showPairingDialog(win *ui.Window, appCtrl *controller.App) *pairing.QRDialo
 			qrDialog.SetStatus("Scan this QR code with Google Messages on your phone\n\nGoogle Messages \u2192 Settings \u2192 Device pairing \u2192 QR code scanner")
 		})
 	}()
+
+	// Google Account pairing
+	qrDialog.SetOnGoogleLogin(func(cookies map[string]string) {
+		emojiChan, errChan := appCtrl.StartGoogleLogin(cookies)
+		go func() {
+			select {
+			case emoji := <-emojiChan:
+				glib.IdleAdd(func() {
+					qrDialog.ShowEmoji(emoji)
+				})
+				// Wait for completion or error after emoji shown
+				if err := <-errChan; err != nil {
+					glib.IdleAdd(func() {
+						qrDialog.ShowError(err.Error())
+					})
+				}
+			case err := <-errChan:
+				glib.IdleAdd(func() {
+					qrDialog.ShowError(err.Error())
+				})
+			}
+		}()
+	})
 
 	qrDialog.Show(win.ApplicationWindow())
 	return qrDialog

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 
@@ -113,6 +114,47 @@ func (a *App) StartPairing() (string, error) {
 	}
 	log.Printf("controller: got QR URL (%d chars): %s", len(url), url[:min(80, len(url))]+"...")
 	return url, nil
+}
+
+// StartGoogleLogin initiates Google Account (Gaia) pairing with browser cookies.
+// Returns channels for emoji display and errors.
+func (a *App) StartGoogleLogin(cookies map[string]string) (emojiChan chan string, errChan chan error) {
+	emojiChan = make(chan string, 1)
+	errChan = make(chan error, 1)
+
+	logger := zerolog.New(log.Writer()).With().Timestamp().Logger()
+	realClient := backend.NewRealClient(nil, logger)
+	a.Client = realClient
+	a.setupRouter()
+
+	realClient.SetEventHandler(a.Router.Handle)
+	realClient.SetCookies(cookies)
+
+	go func() {
+		log.Println("controller: starting Google Account pairing...")
+		err := realClient.DoGaiaPairing(context.Background(), func(emoji string) {
+			log.Printf("controller: emoji for verification: %s", emoji)
+			emojiChan <- emoji
+		})
+		if err != nil {
+			log.Printf("controller: Gaia pairing error: %v", err)
+			errChan <- err
+			return
+		}
+
+		// Save session
+		data, err := json.Marshal(realClient.AuthData())
+		if err == nil {
+			a.Session.Save(data)
+		}
+		log.Println("controller: Google Account pairing successful, session saved")
+
+		if a.OnPairSuccess != nil {
+			a.OnPairSuccess()
+		}
+	}()
+
+	return emojiChan, errChan
 }
 
 func (a *App) connect(authData *libgm.AuthData) {

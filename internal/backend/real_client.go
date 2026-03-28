@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -453,4 +454,12 @@ func (rc *RealClient) SendReaction(messageID string, emoji string) error {
 		Action: gmproto.SendReactionRequest_ADD,
 	})
 	return err
+}
+
+func (rc *RealClient) SetCookies(cookies map[string]string) {
+	rc.client.AuthData.SetCookies(cookies)
+}
+
+func (rc *RealClient) DoGaiaPairing(ctx context.Context, emojiCallback func(string)) error {
+	return rc.client.DoGaiaPairing(ctx, emojiCallback)
 }

@@ -1,6 +1,9 @@
 package backend
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // SIMInfo is the backend-agnostic representation of a SIM card.
 type SIMInfo struct {
@@ -105,4 +108,7 @@ type GMClient interface {
 	GetSIMs() []SIMInfo
 	// Conversations (create)
 	GetOrCreateConversation(numbers []string) (string, error)
+	// Google Account (Gaia) pairing
+	SetCookies(cookies map[string]string)
+	DoGaiaPairing(ctx context.Context, emojiCallback func(string)) error
 }

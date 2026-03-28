@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"sync"
 
 	"github.com/tyler/gmessage/internal/backend"
@@ -201,4 +202,10 @@ func (m *MockClient) SetLoggedIn(v bool) {
 // SetConnected sets the connected state directly.
 func (m *MockClient) SetConnected(v bool) {
 	m.connected = v
+}
+
+func (m *MockClient) SetCookies(cookies map[string]string) {}
+
+func (m *MockClient) DoGaiaPairing(ctx context.Context, emojiCallback func(string)) error {
+	return nil
 }
