@@ -99,22 +99,19 @@ func (s *Sidebar) UpdateConversations(convs []db.Conversation) {
 		}
 	}
 
-	// Update existing or create new rows
-	for i := range convs {
-		if cr, ok := s.rows[convs[i].ID]; ok {
-			cr.Update(&convs[i])
-		} else {
-			cr := NewConversationRow(&convs[i])
-			s.rows[convs[i].ID] = cr
-		}
-	}
-
-	// Reorder: detach all and re-append in correct order
+	// Detach existing rows for reorder
 	for _, cr := range s.rows {
 		s.listBox.Remove(cr.row)
 	}
+
+	// Update existing or create new rows, then append in correct order
 	for i := range convs {
 		if cr, ok := s.rows[convs[i].ID]; ok {
+			cr.Update(&convs[i])
+			s.listBox.Append(cr.row)
+		} else {
+			cr := NewConversationRow(&convs[i])
+			s.rows[convs[i].ID] = cr
 			s.listBox.Append(cr.row)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -429,6 +430,10 @@ func main() {
 				appCtrl.DB.DeleteMediaCache(mediaID)
 			}
 
+			// Wait up to 15 seconds for connection (media loads before OnConnected on startup)
+			for i := 0; i < 30 && appCtrl.Client == nil; i++ {
+				time.Sleep(500 * time.Millisecond)
+			}
 			if appCtrl.Client == nil {
 				return "", fmt.Errorf("not connected")
 			}
@@ -438,7 +443,8 @@ func main() {
 			}
 
 			// Save to disk cache and return path
-			cachePath := filepath.Join(cfg.MediaDir, mediaID+".bin")
+			safeID := strings.ReplaceAll(mediaID, "/", "_")
+			cachePath := filepath.Join(cfg.MediaDir, safeID+".bin")
 			if writeErr := os.WriteFile(cachePath, data, 0600); writeErr != nil {
 				return "", writeErr
 			}
