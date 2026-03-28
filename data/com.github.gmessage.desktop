@@ -1,11 +1,12 @@
 [Desktop Entry]
-Name=GMessage
-Comment=Google Messages for GNOME
-Exec=gmessage
+Name=Chirp
+Comment=Native Google Messages client for GNOME
+Exec=chirp
 Terminal=false
 Type=Application
 Categories=Network;Chat;InstantMessaging;
 Keywords=messages;sms;rcs;google;
 StartupNotify=true
+StartupWMClass=com.github.gmessage
 Icon=com.github.gmessage
 X-GNOME-UsesNotifications=true

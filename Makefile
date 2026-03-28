@@ -1,5 +1,5 @@
 APP_ID   := com.github.gmessage
-BINARY   := gmessage
+BINARY   := chirp
 PREFIX   := $(HOME)/.local
 
 .PHONY: build test vet gate install run clean

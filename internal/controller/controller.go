@@ -170,40 +170,82 @@ func (a *App) setupRouter() {
 			return
 		}
 
-		dbMsg := &db.Message{
-			ID:             msgID,
-			ConversationID: convID,
-			ParticipantID:  m.GetParticipantID(),
-			TimestampMS:    m.GetTimestamp() / 1000, // libgm returns microseconds
+		// Try to load existing message to merge with
+		existing, _ := a.DB.GetMessage(msgID)
+
+		// Start from existing or blank
+		var dbMsg *db.Message
+		if existing != nil {
+			dbMsg = existing
+		} else {
+			dbMsg = &db.Message{
+				ID:             msgID,
+				ConversationID: convID,
+			}
 		}
 
-		// Status
+		// Always update participant and timestamp if present
+		if pid := m.GetParticipantID(); pid != "" {
+			dbMsg.ParticipantID = pid
+		}
+		if ts := m.GetTimestamp(); ts > 0 {
+			dbMsg.TimestampMS = ts / 1000 // libgm returns microseconds
+		}
+
+		// Update status
 		if ms := m.GetMessageStatus(); ms != nil {
 			statusVal := int(ms.GetStatus())
 			dbMsg.IsFromMe = statusVal > 0 && statusVal < 100
 			dbMsg.Status = backend.ConvertMessageStatus(ms.GetStatus())
 		}
 
-		// Text and media from MessageInfo
+		// Update content only if present (don't overwrite with empty)
 		for _, info := range m.GetMessageInfo() {
 			if mc := info.GetMessageContent(); mc != nil {
-				dbMsg.Body = mc.GetContent()
-			}
-			if media := info.GetMediaContent(); media != nil && dbMsg.MediaID == "" {
-				dbMsg.MediaID = media.GetMediaID()
-				dbMsg.MediaMimeType = media.GetMimeType()
-				dbMsg.MediaDecryptKey = media.GetDecryptionKey()
-				dbMsg.MediaSize = media.GetSize()
-				if dims := media.GetDimensions(); dims != nil {
-					dbMsg.MediaWidth = int(dims.GetWidth())
-					dbMsg.MediaHeight = int(dims.GetHeight())
+				if content := mc.GetContent(); content != "" {
+					dbMsg.Body = content
 				}
-				dbMsg.ThumbnailID = media.GetThumbnailMediaID()
-				dbMsg.ThumbnailKey = media.GetThumbnailDecryptionKey()
+			}
+			if media := info.GetMediaContent(); media != nil {
+				if mid := media.GetMediaID(); mid != "" {
+					dbMsg.MediaID = mid
+				}
+				if mime := media.GetMimeType(); mime != "" {
+					dbMsg.MediaMimeType = mime
+				}
+				if key := media.GetDecryptionKey(); len(key) > 0 {
+					dbMsg.MediaDecryptKey = key
+				}
+				if sz := media.GetSize(); sz > 0 {
+					dbMsg.MediaSize = sz
+				}
+				if dims := media.GetDimensions(); dims != nil {
+					if w := int(dims.GetWidth()); w > 0 {
+						dbMsg.MediaWidth = w
+					}
+					if h := int(dims.GetHeight()); h > 0 {
+						dbMsg.MediaHeight = h
+					}
+				}
+				if tid := media.GetThumbnailMediaID(); tid != "" {
+					dbMsg.ThumbnailID = tid
+				}
+				if tkey := media.GetThumbnailDecryptionKey(); len(tkey) > 0 {
+					dbMsg.ThumbnailKey = tkey
+				}
 			}
 		}
 
 		a.DB.UpsertMessage(dbMsg)
+
+		// Update conversation preview
+		preview := dbMsg.Body
+		if preview == "" && dbMsg.MediaID != "" {
+			preview = "📷 Photo"
+		}
+		if preview != "" {
+			a.DB.UpdateConversationPreview(convID, preview, dbMsg.TimestampMS)
+		}
 	}
 }
 

@@ -47,7 +47,7 @@ func main() {
 		// Start event bus
 		go appCtrl.Bus.Start()
 
-		// Subscribe to real-time message events — refresh active conversation
+		// Subscribe to real-time message events — refresh active conversation + sidebar
 		appCtrl.Bus.SubscribeMessage(func(evt app.MessageEvent) {
 			activeConv := win.ActiveConversationID()
 			if activeConv != "" && activeConv == evt.ConversationID {
@@ -59,6 +59,13 @@ func main() {
 						}
 					})
 				}
+			}
+			// Refresh sidebar to update last message preview
+			convs, err := appCtrl.DB.ListConversations(100, 0)
+			if err == nil {
+				glib.IdleAdd(func() {
+					win.UpdateConversations(convs)
+				})
 			}
 		})
 
@@ -430,6 +437,27 @@ func main() {
 				log.Println("send: not connected")
 				return
 			}
+
+			// Optimistic: insert a placeholder message immediately so the user sees it
+			tmpID := fmt.Sprintf("tmp_%d", time.Now().UnixNano())
+			body := req.Text
+			if body == "" && len(req.MediaData) > 0 {
+				body = "📷 Photo"
+			}
+			placeholder := &db.Message{
+				ID:             tmpID,
+				ConversationID: convID,
+				Body:           body,
+				TimestampMS:    time.Now().UnixMilli(),
+				IsFromMe:       true,
+				Status:         0, // hourglass
+			}
+			appCtrl.DB.UpsertMessage(placeholder)
+			msgs, _ := appCtrl.DB.GetMessages(convID, 400, 0)
+			glib.IdleAdd(func() {
+				win.SetMessages(msgs)
+			})
+
 			go func() {
 				var err error
 				if len(req.MediaData) > 0 {
@@ -439,9 +467,16 @@ func main() {
 				}
 				if err != nil {
 					log.Printf("send message: %v", err)
+					// Mark placeholder as failed
+					appCtrl.DB.UpdateMessageStatus(tmpID, 4)
+					dbMsgs, _ := appCtrl.DB.GetMessages(convID, 400, 0)
+					glib.IdleAdd(func() { win.SetMessages(dbMsgs) })
 					return
 				}
 				log.Printf("Message sent to %s", convID)
+
+				// Remove placeholder — the re-fetch will insert the real message
+				appCtrl.DB.DeleteMessage(tmpID)
 				// Brief wait for server to process, then re-fetch from phone
 				time.Sleep(500 * time.Millisecond)
 				msgs, fetchErr := appCtrl.Client.FetchMessages(convID, 400)

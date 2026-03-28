@@ -31,6 +31,7 @@ type Window struct {
 func NewWindow(application *gtk.Application, cfg *app.Config) *Window {
 	win := adw.NewApplicationWindow(application)
 	win.SetTitle("Chirp")
+	win.SetIconName("com.github.gmessage")
 
 	// Restore saved window state
 	state := cfg.LoadWindowState()

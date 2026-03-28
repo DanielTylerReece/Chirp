@@ -70,6 +70,19 @@ func (db *DB) UpsertConversation(conv *Conversation) error {
 	return nil
 }
 
+// UpdateConversationPreview updates the last message preview and timestamp for a conversation.
+func (db *DB) UpdateConversationPreview(convID string, preview string, timestampMS int64) error {
+	_, err := db.Exec(`
+		UPDATE conversations SET last_message_preview = ?, last_message_ts = ?
+		WHERE id = ? AND last_message_ts <= ?`,
+		preview, timestampMS, convID, timestampMS,
+	)
+	if err != nil {
+		return fmt.Errorf("update conversation preview %s: %w", convID, err)
+	}
+	return nil
+}
+
 // GetConversation retrieves a conversation by ID, including its participants.
 func (db *DB) GetConversation(id string) (*Conversation, error) {
 	conv := &Conversation{}

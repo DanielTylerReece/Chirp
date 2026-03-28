@@ -4,9 +4,9 @@ set -e
 PREFIX="${PREFIX:-$HOME/.local}"
 APP_ID="com.github.gmessage"
 
-echo "Installing GMessage to ${PREFIX}..."
+echo "Installing Chirp to ${PREFIX}..."
 
-install -Dm755 gmessage "${PREFIX}/bin/gmessage"
+install -Dm755 chirp "${PREFIX}/bin/chirp"
 install -Dm644 "data/${APP_ID}.desktop" "${PREFIX}/share/applications/${APP_ID}.desktop"
 install -Dm644 "data/${APP_ID}.svg" "${PREFIX}/share/icons/hicolor/scalable/apps/${APP_ID}.svg"
 install -Dm644 "data/${APP_ID}.gschema.xml" "${PREFIX}/share/glib-2.0/schemas/${APP_ID}.gschema.xml"
@@ -23,8 +23,8 @@ gtk-update-icon-cache -f "${PREFIX}/share/icons/hicolor/" 2>/dev/null || true
 # Update desktop database
 update-desktop-database "${PREFIX}/share/applications/" 2>/dev/null || true
 
-echo "GMessage installed successfully!"
+echo "Chirp installed successfully!"
 echo ""
-echo "Run 'gmessage' to start."
-echo "Run 'gmessage --daemon' to start the background service."
+echo "Run 'chirp' to start."
+echo "Run 'chirp --daemon' to start the background service."
 echo "Run 'systemctl --user enable --now gmessage-daemon' for always-on notifications."
